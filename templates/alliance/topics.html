@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Проблемы и задачи — AURUS{% endblock %}
+{% block page_title %}Проблемы и задачи альянса{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex gap-2">
+        <span class="text-muted">{{ topics|length }} тем</span>
+        <select class="form-select form-select-sm" style="width:auto;" onchange="window.location='?status='+this.value">
+            <option value="">Все статусы</option>
+            {% for s in ['Открыто', 'В работе', 'Решено', 'Отложено'] %}
+            <option value="{{ s }}" {% if request.args.get('status') == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <a href="{{ url_for('alliance.create') }}" class="btn btn-sm" style="background:var(--accent);color:#fff;">+ Тема</a>
+</div>
+
+<div class="panel">
+    <div class="panel-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th data-sort="text">Название</th>
+                    <th data-sort="text">Категория</th>
+                    <th data-sort="text">Приоритет</th>
+                    <th data-sort="text">Статус</th>
+                    <th data-sort="text">Участники</th>
+                    <th data-sort="text">Создатель</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in topics %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('alliance.topic', topic_id=t['id']) }}" class="link-accent fw-semibold">
+                            {{ t['title'] }}
+                        </a>
+                    </td>
+                    <td><small>{{ t['category'] or '—' }}</small></td>
+                    <td>
+                        <span class="badge {% if t['priority'] == 'Критический' %}bg-danger{% elif t['priority'] == 'Высокий' %}bg-warning text-dark{% elif t['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">
+                            {{ t['priority'] or '—' }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge {% if t['status'] == 'Открыто' %}bg-primary{% elif t['status'] == 'В работе' %}bg-warning text-dark{% elif t['status'] == 'Решено' %}bg-success{% else %}bg-secondary{% endif %}">
+                            {{ t['status'] or '—' }}
+                        </span>
+                    </td>
+                    <td><small class="text-muted">{{ t['participants'] or '—' }}</small></td>
+                    <td><small>{{ t['created_by'] or '—' }}</small></td>
+                </tr>
+                {% endfor %}
+                {% if not topics %}
+                <tr><td colspan="6" class="text-center text-muted py-3">Нет тем</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

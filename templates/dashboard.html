@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Дашборд — AURUS{% endblock %}
+{% block page_title %}Дашборд{% endblock %}
+{% block content %}
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="bi bi-people"></i></div>
+        <div>
+            <div class="stat-value">{{ total_players }}</div>
+            <div class="stat-label">Всего игроков</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="bi bi-person-check"></i></div>
+        <div>
+            <div class="stat-value">{{ active_today }}</div>
+            <div class="stat-label">Активных</div>
+            <div class="stat-change text-success" style="font-size:11px;">{{ (active_today / total_players * 100)|round(1) if total_players else 0 }}% от состава</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon orange"><i class="bi bi-person-x"></i></div>
+        <div>
+            <div class="stat-value">{{ inactive_count }}</div>
+            <div class="stat-label">Неактивные</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon cyan"><i class="bi bi-person-badge"></i></div>
+        <div>
+            <div class="stat-value">{{ total_accounts }}</div>
+            <div class="stat-label">Привязанные аккаунты</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red"><i class="bi bi-list-task"></i></div>
+        <div>
+            <div class="stat-value">{{ open_tasks }}</div>
+            <div class="stat-label">Открытые задачи</div>
+            {% if critical_tasks %}<div class="stat-change priority-high" style="font-size:11px;">{{ critical_tasks }} критических</div>{% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="panel">
+        <div class="panel-header">
+            <h6><i class="bi bi-people me-2"></i>Обзор игроков</h6>
+            <div class="d-flex gap-2">
+                <div class="search-box">
+                    <i class="bi bi-search"></i>
+                    <input type="text" class="form-control form-control-sm" placeholder="Поиск..." style="width:200px;padding-left:32px;">
+                </div>
+                <a href="{{ url_for('players.list') }}" class="btn btn-sm btn-outline-secondary">Все игроки</a>
+            </div>
+        </div>
+        <div class="panel-body p-0">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th data-sort="text">Игрок</th>
+                        <th data-sort="text">Ранг</th>
+                        <th data-sort="text">Роль</th>
+                        <th data-sort="text">Расы</th>
+                        <th data-sort="text">Активность</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in top_players %}
+                    <tr class="{% if p['races'] %}race-row-{{ p['races'].split(',')[0] }}{% endif %}">
+                        <td>
+                            <a href="{{ url_for('players.card', player_id=p['id']) }}" class="link-accent">
+                                {{ p['nick'] }}
+                            </a>
+                        </td>
+                        <td><small>{{ p['rank_in_game'] or '—' }}</small></td>
+                        <td>
+                            {% if p['role'] %}
+                            <span class="role-badge role-{% if 'Глава' in p['role'] or 'Лидер' in p['role'] %}leader{% elif 'Заместитель' in p['role'] %}deputy{% elif 'СОВЕТ' in p['role'] %}council{% elif 'Куратор' in p['role'] %}officer{% else %}member{% endif %}">
+                                {{ p['role'] }}
+                            </span>
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if p['races'] %}
+                            {% for r in p['races'].split(',') %}
+                            <span class="badge-race badge-{{ r|lower }}">{{ r }}</span>
+                            {% endfor %}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if 'Активен' in (p['activity'] or '') %}
+                            <span class="badge-status badge-online">Онлайн</span>
+                            {% elif 'Недавно' in (p['activity'] or '') %}
+                            <span class="badge-status badge-recent">Недавно</span>
+                            {% elif 'Давно' in (p['activity'] or '') %}
+                            <span class="badge-status badge-sleeping">Давно</span>
+                            {% else %}
+                            <small class="text-muted">{{ p['activity'] or '—' }}</small>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <h6><i class="bi bi-list-task me-2"></i>Задачи / оперативная активность</h6>
+            <a href="{{ url_for('tasks.list') }}" class="btn btn-sm btn-outline-secondary">Все задачи</a>
+        </div>
+        <div class="panel-body p-0">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Задача</th>
+                        <th>Ответственный</th>
+                        <th>Статус</th>
+                        <th>Срок</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in recent_tasks %}
+                    <tr>
+                        <td><strong>{{ t['title'] }}</strong></td>
+                        <td>{{ t['assignee_nick'] or '—' }}</td>
+                        <td>
+                            {% if t['status'] == 'Новая' %}
+                            <span class="badge-status badge-online">{{ t['status'] }}</span>
+                            {% elif t['status'] == 'В работе' %}
+                            <span class="badge-status badge-recent">{{ t['status'] }}</span>
+                            {% elif t['status'] == 'Выполнена' %}
+                            <span class="badge-status" style="background:rgba(108,92,231,0.12);color:var(--accent);">Выполнена</span>
+                            {% else %}
+                            <span class="badge-status badge-sleeping">{{ t['status'] }}</span>
+                            {% endif %}
+                        </td>
+                        <td><small>{{ t['deadline'] or '—' }}</small></td>
+                    </tr>
+                    {% endfor %}
+                    {% if not recent_tasks %}
+                    <tr><td colspan="4" class="text-center text-muted py-3">Нет задач</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="panel full-width">
+        <div class="panel-header">
+            <h6><i class="bi bi-shield-lock me-2"></i>Иерархия ролей и доступов</h6>
+        </div>
+        <div class="panel-body">
+            <div class="row">
+                {% for level in access_levels %}
+                <div class="col-md-3 mb-2">
+                    <div class="d-flex align-items-center gap-2 p-2 rounded" style="background:var(--bg-main);">
+                        <span class="role-badge {% if level['id'] == 7 %}role-leader{% elif level['id'] == 6 %}role-deputy{% elif level['id'] == 5 %}role-council{% elif level['id'] >= 3 %}role-officer{% else %}role-member{% endif %}">
+                            {{ level['level_name'] }}
+                        </span>
+                        <small class="text-muted">{{ level['description'] }}</small>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

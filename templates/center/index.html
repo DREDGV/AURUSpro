@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% block title %}Центр управления — AURUS{% endblock %}
+{% block page_title %}Центр управления{% endblock %}
+{% block content %}
+
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="bi bi-people"></i></div>
+        <div>
+            <div class="stat-value">{{ total_players }}</div>
+            <div class="stat-label">Всего игроков</div>
+            <div class="stat-change" style="font-size:11px;">{{ active_players }} активных</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon red"><i class="bi bi-exclamation-triangle"></i></div>
+        <div>
+            <div class="stat-value">{{ pending_requests|length }}</div>
+            <div class="stat-label">Запросов без ответа</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon orange"><i class="bi bi-question-circle"></i></div>
+        <div>
+            <div class="stat-value">{{ unanswered_count }}</div>
+            <div class="stat-label">Без анкеты</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon cyan"><i class="bi bi-chat-left-dots"></i></div>
+        <div>
+            <div class="stat-value">{{ open_topics|length }}</div>
+            <div class="stat-label">Обсуждений</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="bi bi-check2-circle"></i></div>
+        <div>
+            <div class="stat-value">{{ total_requests }}</div>
+            <div class="stat-label">Всего запросов</div>
+            <div class="stat-change text-success" style="font-size:11px;">{{ resolved_requests }} решено</div>
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="panel">
+        <div class="panel-header">
+            <h6><i class="bi bi-exclamation-triangle me-2 text-danger"></i>Срочные запросы</h6>
+            <a href="{{ url_for('center.requests_list') }}" class="btn btn-sm btn-outline-secondary">Все</a>
+        </div>
+        <div class="panel-body p-0">
+            {% if pending_requests %}
+            <table class="table table-hover mb-0">
+                <tbody>
+                    {% for r in pending_requests[:5] %}
+                    <tr>
+                        <td>
+                            <span class="badge {% if r['priority'] == 'Критический' %}bg-danger{% elif r['priority'] == 'Высокий' %}bg-warning text-dark{% else %}bg-info{% endif %}" style="font-size:10px;">
+                                {{ r['priority'] }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('center.request_detail', request_id=r['id']) }}" class="link-accent fw-semibold">{{ r['title'] }}</a>
+                            <br><small class="text-muted">{{ r['player_nick'] or '—' }} · {{ r['request_type'] }}</small>
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-success" onclick="quickStatus({{ r['id'] }}, 'В работе')">В работу</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="text-center text-muted py-4">
+                <i class="bi bi-check-circle" style="font-size:32px;color:var(--success);"></i>
+                <p class="mt-2">Нет открытых запросов</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">
+            <h6><i class="bi bi-check2-square me-2"></i>Решения</h6>
+            <a href="{{ url_for('center.decisions') }}" class="btn btn-sm btn-outline-secondary">Все</a>
+        </div>
+        <div class="panel-body p-0">
+            {% if recent_decisions %}
+            <table class="table table-hover mb-0">
+                <tbody>
+                    {% for d in recent_decisions[:5] %}
+                    <tr>
+                        <td>
+                            <span class="badge {% if d['status'] == 'Предложено' %}bg-primary{% elif d['status'] == 'Согласовано' %}bg-warning text-dark{% elif d['status'] == 'Выполнено' %}bg-success{% else %}bg-secondary{% endif %}" style="font-size:10px;">
+                                {{ d['status'] }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('center.decision_detail', decision_id=d['id']) }}" class="link-accent fw-semibold">{{ d['title'] }}</a>
+                            <br><small class="text-muted">{{ d['proposer'] or '—' }}</small>
+                        </td>
+                        <td class="text-end">
+                            {% if d['status'] == 'Предложено' %}
+                            <button class="btn btn-sm btn-outline-success" onclick="quickDecision({{ d['id'] }}, 'Согласовано')">OK</button>
+                            {% elif d['status'] == 'Согласовано' %}
+                            <button class="btn btn-sm btn-outline-primary" onclick="quickDecision({{ d['id'] }}, 'Выполнено')">Готово</button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="text-center text-muted py-4">Нет решений</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="panel full-width">
+        <div class="panel-header">
+            <h6><i class="bi bi-journal-text me-2"></i>Журнал событий</h6>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-primary" onclick="showQuickLog()">+ Быстрое</button>
+                <a href="{{ url_for('center.log') }}" class="btn btn-sm btn-outline-secondary">Все</a>
+            </div>
+        </div>
+        <div class="panel-body p-0">
+            {% if recent_log %}
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="width:100px;">Дата</th>
+                        <th style="width:80px;">Тип</th>
+                        <th>Событие</th>
+                        <th style="width:80px;">Автор</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for e in recent_log[:8] %}
+                    <tr>
+                        <td><small class="text-muted">{{ e['event_date'] or '' }}</small></td>
+                        <td>
+                            <span class="badge {% if e['event_type'] == 'Проблема' %}bg-danger{% elif e['event_type'] == 'Решение' %}bg-success{% elif e['event_type'] == 'Игрок' %}bg-info{% elif e['event_type'] == 'Военное' %}bg-warning text-dark{% elif e['event_type'] == 'Создание' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                {{ e['event_type'] }}
+                            </span>
+                        </td>
+                        <td>
+                            <strong>{{ e['title'] }}</strong>
+                            {% if e['description'] %}<br><small class="text-muted">{{ e['description'][:80] }}{% if e['description']|length > 80 %}...{% endif %}</small>{% endif %}
+                        </td>
+                        <td><small>{{ e['author'] or '—' }}</small></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="text-center text-muted py-4">Нет событий</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if help_needed %}
+    <div class="panel full-width">
+        <div class="panel-header">
+            <h6><i class="bi bi-heart me-2 text-danger"></i>Нуждается в помощи</h6>
+        </div>
+        <div class="panel-body">
+            <div class="row">
+                {% for p in help_needed %}
+                <div class="col-md-4 mb-2">
+                    <a href="{{ url_for('players.card', player_id=p['id']) }}" class="d-block p-2 rounded" style="background:var(--bg-main); text-decoration:none;">
+                        <strong class="link-accent">{{ p['nick'] }}</strong>
+                        <br><small class="text-muted">{{ p['needs_help_with'][:60] }}</small>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div id="quickLogModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Быстрое событие</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Тип</label>
+                    <select id="ql-type" class="form-select">
+                        {% for t in ['Игрок', 'Военное', 'Дипломатия', 'Экономика', 'Решение', 'Проблема', 'Прочее'] %}
+                        <option value="{{ t }}">{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Название</label>
+                    <input type="text" id="ql-title" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Описание</label>
+                    <textarea id="ql-desc" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button class="btn btn-primary" onclick="submitQuickLog()">Добавить</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function quickStatus(requestId, newStatus) {
+    fetch('/center/ajax/request/' + requestId + '/status', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: newStatus})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) { if (data.status === 'ok') location.reload(); });
+}
+
+function quickDecision(decisionId, newStatus) {
+    fetch('/center/ajax/decision/' + decisionId + '/status', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: newStatus})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) { if (data.status === 'ok') location.reload(); });
+}
+
+function showQuickLog() {
+    new bootstrap.Modal(document.getElementById('quickLogModal')).show();
+}
+
+function submitQuickLog() {
+    var title = document.getElementById('ql-title').value.trim();
+    if (!title) return;
+    fetch('/center/ajax/log/quick', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            event_type: document.getElementById('ql-type').value,
+            title: title,
+            description: document.getElementById('ql-desc').value
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) { if (data.status === 'ok') location.reload(); });
+}
+</script>
+{% endblock %}

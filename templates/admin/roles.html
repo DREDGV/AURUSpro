@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Управление ролями — AURUS{% endblock %}
+{% block content %}
+<h2>Управление ролями</h2>
+<table class="table mt-3">
+    <thead class="table-dark">
+        <tr>
+            <th>Уровень</th>
+            <th>Роль</th>
+            <th>Описание</th>
+            <th>Игроков</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for level in levels %}
+        <tr>
+            <td>{{ level['id'] }}</td>
+            <td><strong>{{ level['level_name'] }}</strong></td>
+            <td>{{ level['description'] or '—' }}</td>
+            <td>{{ level['player_count'] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<h3 class="mt-4">Назначение роли игроку</h3>
+<form method="POST" class="row g-2 mt-2" action="{{ url_for('admin.assign_role') }}">
+    <div class="col-md-4">
+        <select name="player_id" class="form-select" required>
+            <option value="">Выберите игрока...</option>
+            {% for p in players %}
+            <option value="{{ p['id'] }}">{{ p['nick'] }} ({{ p['role'] or 'Без роли' }})</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-3">
+        <select name="access_level" class="form-select" required>
+            {% for level in levels %}
+            <option value="{{ level['id'] }}">{{ level['level_name'] }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2">
+        <button type="submit" class="btn btn-primary">Назначить</button>
+    </div>
+</form>
+{% endblock %}

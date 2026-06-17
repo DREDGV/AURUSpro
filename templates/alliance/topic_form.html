@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Новая тема — AURUS{% endblock %}
+{% block page_title %}Новая тема{% endblock %}
+{% block content %}
+<form method="POST" class="col-md-8">
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Название *</label>
+        <input type="text" name="title" class="form-control" required>
+    </div>
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Категория</label>
+            <select name="category" class="form-select">
+                {% for c in ['Обсуждение', 'Стратегия', 'Техническая', 'Дипломатия', 'Военная', 'Экономическая', 'Другое'] %}
+                <option value="{{ c }}">{{ c }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Приоритет</label>
+            <select name="priority" class="form-select">
+                {% for p in ['Критический', 'Высокий', 'Средний', 'Низкий'] %}
+                <option value="{{ p }}">{{ p }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Статус</label>
+            <select name="status" class="form-select">
+                {% for s in ['Открыто', 'В работе', 'Решено', 'Отложено'] %}
+                <option value="{{ s }}">{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Описание</label>
+        <textarea name="description" class="form-control" rows="4"></textarea>
+    </div>
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Участники</label>
+        <input type="text" name="participants" class="form-control" placeholder="Через запятую: DREDGV, Zuka">
+    </div>
+    <button type="submit" class="btn" style="background:var(--accent);color:#fff;">Создать</button>
+    <a href="{{ url_for('alliance.topics') }}" class="btn btn-secondary">Отмена</a>
+</form>
+{% endblock %}

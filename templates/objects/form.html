@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}{% if obj %}Редактирование{% else %}Новый объект{% endif %} — AURUS{% endblock %}
+{% block page_title %}{% if obj %}Редактирование: {{ obj['name'] }}{% else %}Добавить объект{% endif %}{% endblock %}
+{% block content %}
+<div class="mb-3">
+    <a href="{{ url_for('game_objects.list') }}" class="btn btn-sm btn-outline-secondary">← Назад</a>
+</div>
+<form method="POST" class="col-md-8">
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label class="form-label fw-semibold">Тип объекта *</label>
+            <select name="object_type" class="form-select" required>
+                {% for t in ['ОПС', 'Луна', 'Врата', 'Астероид', 'Станция', 'Спутник', 'Дуня', 'Алстанция', 'Другое'] %}
+                <option value="{{ t }}" {% if obj and obj['object_type'] == t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label class="form-label fw-semibold">Название</label>
+            <input type="text" name="name" class="form-control" value="{{ obj['name'] if obj else '' }}">
+        </div>
+        <div class="col-md-4 mb-3">
+            <label class="form-label fw-semibold">Координаты</label>
+            <input type="text" name="coordinates" class="form-control" value="{{ obj['coordinates'] if obj else '' }}" placeholder="[x:y:z]">
+        </div>
+        <div class="col-md-4 mb-3">
+            <label class="form-label fw-semibold">Сектор</label>
+            <input type="text" name="sector" class="form-control" value="{{ obj['sector'] if obj else '' }}">
+        </div>
+        <div class="col-md-4 mb-3">
+            <label class="form-label fw-semibold">Уровень</label>
+            <input type="number" name="level" class="form-control" value="{{ obj['level'] if obj else 1 }}" min="1">
+        </div>
+        <div class="col-md-6 mb-3">
+            <label class="form-label fw-semibold">Владелец (игрок)</label>
+            <select name="player_id" class="form-select">
+                <option value="">— Не привязан —</option>
+                {% for p in players %}
+                <option value="{{ p['id'] }}" {% if obj and obj['player_id'] == p['id'] %}selected{% endif %}>{{ p['nick'] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label class="form-label fw-semibold">Статус</label>
+            <select name="status" class="form-select">
+                {% for s in ['Активен', 'Ремонт', 'Разрушен', 'Заморожен'] %}
+                <option value="{{ s }}" {% if obj and obj['status'] == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Значение / описание</label>
+        <input type="text" name="value" class="form-control" value="{{ obj['value'] if obj else '' }}">
+    </div>
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Флаги</label>
+        <div class="d-flex gap-3">
+            <div class="form-check">
+                <input type="checkbox" name="controlled" class="form-check-input" {% if obj and obj['controlled'] %}checked{% endif %}>
+                <label class="form-check-label">Под контролем</label>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" name="needs_protection" class="form-check-input" {% if obj and obj['needs_protection'] %}checked{% endif %}>
+                <label class="form-check-label">Нужна защита</label>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" name="needs_development" class="form-check-input" {% if obj and obj['needs_development'] %}checked{% endif %}>
+                <label class="form-check-label">Нужно развитие</label>
+            </div>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Комментарий</label>
+        <textarea name="comment" class="form-control" rows="2">{{ obj['comment'] if obj else '' }}</textarea>
+    </div>
+    <button type="submit" class="btn" style="background:var(--accent);color:#fff;">{% if obj %}Сохранить{% else %}Добавить{% endif %}</button>
+    <a href="{{ url_for('game_objects.list') }}" class="btn btn-secondary">Отмена</a>
+</form>
+{% endblock %}

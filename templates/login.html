@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Вход — AURUS{% endblock %}
+{% block content %}
+<div class="login-wrapper">
+    <div class="login-card">
+        <div class="login-header">
+            <div class="login-logo">
+                <i class="bi bi-hexagon-fill"></i>
+            </div>
+            <h2>AURUS Control Panel</h2>
+            <p class="text-muted">Управление альянсом AURUS [SILA]</p>
+        </div>
+        <form method="POST" class="login-form">
+            <div class="form-floating mb-3">
+                <input type="text" name="username" class="form-control" id="username" placeholder="Логин" required autofocus>
+                <label for="username"><i class="bi bi-person me-1"></i>Логин</label>
+            </div>
+            <div class="form-floating mb-4">
+                <input type="password" name="password" class="form-control" id="password" placeholder="Пароль" required>
+                <label for="password"><i class="bi bi-lock me-1"></i>Пароль</label>
+            </div>
+            <button type="submit" class="btn btn-primary btn-login w-100">
+                {% if register %}Зарегистрироваться{% else %}Войти{% endif %}
+            </button>
+        </form>
+        <div class="login-footer">
+            {% if register %}
+            <span class="text-muted">Уже есть аккаунт?</span>
+            <a href="{{ url_for('auth.login') }}">Войти</a>
+            {% else %}
+            <span class="text-muted">Нет аккаунта?</span>
+            <a href="{{ url_for('auth.register') }}">Зарегистрироваться</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

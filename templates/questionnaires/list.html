@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Анкеты — AURUS{% endblock %}
+{% block page_title %}Анкеты{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <span class="text-muted">Всего анкет: {{ items|length }}</span>
+    </div>
+</div>
+
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>Дата</th>
+            <th>Игрок</th>
+            <th>Статус</th>
+            <th>Обработано</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for q in items %}
+        <tr>
+            <td><small>{{ q['created_at'] or '—' }}</small></td>
+            <td>{{ q['player_nick'] or 'Новый' }}</td>
+            <td>
+                {% if q['status'] == 'Новая' %}
+                <span class="badge-status badge-online">Новая</span>
+                {% elif q['status'] == 'Обработана' %}
+                <span class="badge-status" style="background:rgba(108,92,231,0.12);color:var(--accent);">Обработана</span>
+                {% else %}
+                <span class="badge-status badge-sleeping">{{ q['status'] }}</span>
+                {% endif %}
+            </td>
+            <td>{% if q['processed'] %}<i class="bi bi-check-circle-fill text-success"></i>{% else %}<i class="bi bi-clock text-muted"></i>{% endif %}</td>
+            <td><a href="#" class="link-accent">Просмотр</a></td>
+        </tr>
+        {% endfor %}
+        {% if not items %}
+        <tr><td colspan="5" class="text-center text-muted py-4">Нет анкет</td></tr>
+        {% endif %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Статистика — AURUS{% endblock %}
+{% block page_title %}Статистика аккаунтов{% endblock %}
+{% block content %}
+<div class="mb-3">
+    <a href="{{ url_for('myaccounts.index') }}" class="btn btn-sm btn-outline-secondary">← Мои аккаунты</a>
+</div>
+
+<div class="stats-row mb-3">
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="bi bi-person-badge"></i></div>
+        <div>
+            <div class="stat-value">{{ accounts|length }}</div>
+            <div class="stat-label">Аккаунтов</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="bi bi-coin"></i></div>
+        <div>
+            <div class="stat-value">{{ '{:,}'.format(total_points).replace(',', ' ') }}</div>
+            <div class="stat-label">Всего очков</div>
+        </div>
+    </div>
+    {% for race, count in races.items() %}
+    <div class="stat-card">
+        <div class="stat-icon {% if race == 'Терран' %}blue{% elif race == 'Жук' %}green{% else %}purple{% endif %}"><i class="bi bi-controller"></i></div>
+        <div>
+            <div class="stat-value">{{ count }}</div>
+            <div class="stat-label">{{ race }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if player %}
+<div class="panel mb-3">
+    <div class="panel-header">
+        <h6>Основная информация</h6>
+    </div>
+    <div class="panel-body">
+        <div class="row">
+            <div class="col-md-4">
+                <small class="text-muted">Ник:</small> <strong>{{ player['nick'] }}</strong>
+            </div>
+            <div class="col-md-4">
+                <small class="text-muted">Имя:</small> <strong>{{ player['name'] or '—' }}</strong>
+            </div>
+            <div class="col-md-4">
+                <small class="text-muted">Страна:</small> <strong>{{ player['country'] or '—' }}</strong>
+            </div>
+            <div class="col-md-4 mt-2">
+                <small class="text-muted">Статус:</small> <strong>{{ player['player_status'] or '—' }}</strong>
+            </div>
+            <div class="col-md-4 mt-2">
+                <small class="text-muted">Направление:</small> <strong>{{ player['direction'] or '—' }}</strong>
+            </div>
+            <div class="col-md-4 mt-2">
+                <small class="text-muted">Роль:</small> <strong>{{ player['role'] or '—' }}</strong>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="panel">
+    <div class="panel-header">
+        <h6>Детальная статистика</h6>
+    </div>
+    <div class="panel-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Аккаунт</th>
+                    <th>Раса</th>
+                    <th>Тип</th>
+                    <th>Очки</th>
+                    <th>Координаты</th>
+                    <th>Активность</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for acc in accounts %}
+                <tr>
+                    <td><strong>{{ acc['nick'] }}</strong></td>
+                    <td><span class="badge-race badge-{{ acc['race']|lower if acc['race'] else 'secondary' }}">{{ acc['race'] or '—' }}</span></td>
+                    <td><small>{{ acc['account_type'] }}</small></td>
+                    <td>{{ '{:,}'.format(acc['points'] or 0).replace(',', ' ') }}</td>
+                    <td><code>{{ acc['coordinates'] or '—' }}</code></td>
+                    <td><small>{{ acc['activity'] or '—' }}</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

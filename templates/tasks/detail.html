@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ task['title'] }} — AURUS{% endblock %}
+{% block page_title %}{{ task['title'] }}{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="panel mb-3">
+            <div class="panel-header">
+                <h6>Детали задачи</h6>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('tasks.edit', task_id=task['id']) }}" class="btn btn-sm btn-outline-primary">✎ Редактировать</a>
+                    <a href="{{ url_for('tasks.list') }}" class="btn btn-sm btn-outline-secondary">← Назад</a>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="d-flex gap-2 mb-3">
+                    <span class="badge {% if task['priority'] == 'Критический' %}bg-danger{% elif task['priority'] == 'Высокий' %}bg-warning text-dark{% elif task['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">
+                        {{ task['priority'] }}
+                    </span>
+                    <span class="badge {% if task['status'] == 'Новая' %}bg-primary{% elif task['status'] == 'В работе' %}bg-warning text-dark{% elif task['status'] == 'Выполнена' %}bg-success{% else %}bg-secondary{% endif %}">
+                        {{ task['status'] }}
+                    </span>
+                </div>
+                {% if task['description'] %}
+                <div class="p-3 rounded mb-3" style="background:var(--bg-main);">
+                    {{ task['description'] }}
+                </div>
+                {% endif %}
+                <div class="row text-muted" style="font-size:13px;">
+                    <div class="col-md-4"><strong>Ответственный:</strong> {{ task['assignee_nick'] or '—' }}</div>
+                    <div class="col-md-4"><strong>Направление:</strong> {{ task['direction'] or '—' }}</div>
+                    <div class="col-md-4"><strong>Срок:</strong> {{ task['deadline'] or '—' }}</div>
+                </div>
+                {% if task['participants'] %}
+                <div class="mt-2 text-muted" style="font-size:13px;"><strong>Участники:</strong> {{ task['participants'] }}</div>
+                {% endif %}
+                {% if task['comment'] %}
+                <div class="mt-2 p-3 rounded" style="background:var(--bg-main); border-left:3px solid var(--accent);">
+                    <small class="text-muted">Комментарий:</small><br>{{ task['comment'] }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="panel mb-3">
+            <div class="panel-header">
+                <h6>Комментарии ({{ comments|length }})</h6>
+            </div>
+            <div class="panel-body">
+                {% for c in comments %}
+                <div class="mb-3 p-3 rounded" style="background:var(--bg-main);">
+                    <div class="d-flex justify-content-between mb-1">
+                        <strong>{{ c['author'] }}</strong>
+                        <small class="text-muted">{{ c['created_at'][:16] if c['created_at'] else '' }}</small>
+                    </div>
+                    <p class="mb-0" style="white-space:pre-wrap;">{{ c['comment_text'] }}</p>
+                </div>
+                {% endfor %}
+                {% if not comments %}
+                <p class="text-muted text-center">Нет комментариев</p>
+                {% endif %}
+                <form method="POST" action="{{ url_for('tasks.add_comment', task_id=task['id']) }}" class="mt-3">
+                    <div class="mb-2">
+                        <textarea name="comment_text" class="form-control" rows="2" placeholder="Комментарий..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-sm" style="background:var(--accent);color:#fff;">Отправить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="panel mb-3">
+            <div class="panel-header">
+                <h6>Быстрые действия</h6>
+            </div>
+            <div class="panel-body">
+                <div class="d-grid gap-2">
+                    {% if task['status'] != 'Новая' %}
+                    <button class="btn btn-outline-primary btn-sm" onclick="changeStatus({{ task['id'] }}, 'Новая')">↩ Новая</button>
+                    {% endif %}
+                    {% if task['status'] != 'В работе' %}
+                    <button class="btn btn-outline-warning btn-sm" onclick="changeStatus({{ task['id'] }}, 'В работе')">▶ В работу</button>
+                    {% endif %}
+                    {% if task['status'] != 'Выполнена' %}
+                    <button class="btn btn-outline-success btn-sm" onclick="changeStatus({{ task['id'] }}, 'Выполнена')">✓ Выполнена</button>
+                    {% endif %}
+                    {% if task['status'] != 'Отменена' %}
+                    <button class="btn btn-dark btn-sm" onclick="changeStatus({{ task['id'] }}, 'Отменена')">✕ Отменена</button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function changeStatus(taskId, newStatus) {
+    fetch('/tasks/' + taskId + '/status', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: newStatus})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) { if (data.status === 'ok') location.reload(); });
+}
+</script>
+{% endblock %}

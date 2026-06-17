@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}{% if account %}Редактировать{% else %}Добавить{% endif %} аккаунт — AURUS{% endblock %}
+{% block content %}
+<h2>{% if account %}Редактировать аккаунт{% else %}Добавить аккаунт{% endif %}</h2>
+<form method="POST" class="col-md-6">
+    <input type="hidden" name="player_id" value="{{ account['player_id'] if account else request.args.get('player_id', '') }}">
+    <div class="mb-3">
+        <label class="form-label">Ник аккаунта</label>
+        <input type="text" name="nick" class="form-control" value="{{ account['nick'] if account else '' }}" required>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Раса</label>
+        <select name="race" class="form-select">
+            <option value="Терран" {% if account and account['race'] == 'Терран' %}selected{% endif %}>Терран</option>
+            <option value="Жук" {% if account and account['race'] == 'Жук' %}selected{% endif %}>Жук</option>
+            <option value="Тосс" {% if account and account['race'] == 'Тосс' %}selected{% endif %}>Тосс</option>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Тип аккаунта</label>
+        <select name="account_type" class="form-select">
+            <option value="Основной" {% if account and account['account_type'] == 'Основной' %}selected{% endif %}>Основной</option>
+            <option value="Твинк" {% if account and account['account_type'] == 'Твинк' %}selected{% endif %}>Твинк</option>
+            <option value="Сервисный" {% if account and account['account_type'] == 'Сервисный' %}selected{% endif %}>Сервисный</option>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Очки</label>
+        <input type="number" name="points" class="form-control" value="{{ account['points'] if account else 0 }}">
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Координаты</label>
+        <input type="text" name="coordinates" class="form-control" value="{{ account['coordinates'] if account else '' }}">
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Назначение</label>
+        <input type="text" name="purpose" class="form-control" value="{{ account['purpose'] if account else '' }}">
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Активность</label>
+        <select name="activity" class="form-select">
+            {% for a in ['В игре', 'Активен сегодня', 'Недавно был', 'Редкий онлайн', 'Давно не был', 'Неизвестно'] %}
+            <option value="{{ a }}" {% if account and account['activity'] == a %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Комментарий</label>
+        <textarea name="comment" class="form-control">{{ account['comment'] if account else '' }}</textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Сохранить</button>
+    <a href="{{ url_for('accounts.list') }}" class="btn btn-secondary">Отмена</a>
+</form>
+{% endblock %}

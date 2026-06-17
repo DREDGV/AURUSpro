@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Решения — AURUS{% endblock %}
+{% block page_title %}Решения альянса{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <span class="text-muted">{{ decisions|length }} решений</span>
+    <a href="{{ url_for('center.create_decision') }}" class="btn btn-sm" style="background:var(--accent);color:#fff;">+ Решение</a>
+</div>
+<div class="panel">
+    <div class="panel-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Название</th>
+                    <th>Предложил</th>
+                    <th>Статус</th>
+                    <th>Приоритет</th>
+                    <th>Срок</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in decisions %}
+                <tr>
+                    <td><strong><a href="{{ url_for('center.decision_detail', decision_id=d['id']) }}" class="link-accent">{{ d['title'] }}</a></strong>{% if d['description'] %}<br><small class="text-muted">{{ d['description'][:80] }}{% if d['description']|length > 80 %}...{% endif %}</small>{% endif %}</td>
+                    <td><small>{{ d['proposer'] or '—' }}</small></td>
+                    <td><span class="badge {% if d['status'] == 'Предложено' %}bg-primary{% elif d['status'] == 'Согласовано' %}bg-warning text-dark{% elif d['status'] == 'Выполнено' %}bg-success{% else %}bg-secondary{% endif %}">{{ d['status'] }}</span></td>
+                    <td><span class="badge {% if d['priority'] == 'Высокий' %}bg-warning text-dark{% elif d['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">{{ d['priority'] or '—' }}</span></td>
+                    <td><small>{{ d['deadline'] or '—' }}</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

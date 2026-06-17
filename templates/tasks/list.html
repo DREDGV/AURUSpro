@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Задачи — AURUS{% endblock %}
+{% block page_title %}Задачи альянса{% endblock %}
+{% block content %}
+
+<div class="stats-row mb-3">
+    <div class="stat-card" style="cursor:pointer;" onclick="window.location='?status='">
+        <div class="stat-value">{{ stats.total }}</div>
+        <div class="stat-label">Всего</div>
+    </div>
+    <div class="stat-card" style="cursor:pointer;border-left:3px solid var(--danger);" onclick="window.location='?status=Новая'">
+        <div class="stat-value text-danger">{{ stats.new }}</div>
+        <div class="stat-label">Новых</div>
+    </div>
+    <div class="stat-card" style="cursor:pointer;border-left:3px solid var(--warning);" onclick="window.location='?status=В работе'">
+        <div class="stat-value" style="color:#e67e22;">{{ stats.in_work }}</div>
+        <div class="stat-label">В работе</div>
+    </div>
+    <div class="stat-card" style="cursor:pointer;border-left:3px solid var(--success);" onclick="window.location='?status=Выполнена'">
+        <div class="stat-value text-success">{{ stats.done }}</div>
+        <div class="stat-label">Выполнено</div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex gap-2">
+        <select class="form-select form-select-sm" style="width:auto;" onchange="window.location='?priority='+this.value+'&status={{ current_status }}'">
+            <option value="">Все приоритеты</option>
+            {% for p in ['Критический', 'Высокий', 'Средний', 'Низкий'] %}
+            <option value="{{ p }}" {% if current_priority == p %}selected{% endif %}>{{ p }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <a href="{{ url_for('tasks.create') }}" class="btn btn-sm" style="background:var(--accent);color:#fff;">+ Новая задача</a>
+</div>
+
+<div class="panel">
+    <div class="panel-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Задача</th>
+                    <th>Направление</th>
+                    <th>Ответственный</th>
+                    <th>Приоритет</th>
+                    <th>Статус</th>
+                    <th>Срок</th>
+                    <th style="width:80px;">Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for t in tasks %}
+                <tr>
+                    <td>
+                        <a href="{{ url_for('tasks.detail', task_id=t['id']) }}" class="link-accent fw-semibold">{{ t['title'] }}</a>
+                        {% if t['description'] %}<br><small class="text-muted">{{ t['description'][:50] }}{% if t['description']|length > 50 %}...{% endif %}</small>{% endif %}
+                    </td>
+                    <td><small class="text-muted">{{ t['direction'] or '—' }}</small></td>
+                    <td><small>{{ t['assignee_nick'] or '—' }}</small></td>
+                    <td>
+                        {% if t['priority'] == 'Критический' %}
+                        <span class="badge bg-danger">{{ t['priority'] }}</span>
+                        {% elif t['priority'] == 'Высокий' %}
+                        <span class="badge bg-warning text-dark">{{ t['priority'] }}</span>
+                        {% elif t['priority'] == 'Средний' %}
+                        <span class="badge bg-info">{{ t['priority'] }}</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ t['priority'] }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge {% if t['status'] == 'Новая' %}bg-primary{% elif t['status'] == 'В работе' %}bg-warning text-dark{% elif t['status'] == 'Выполнена' %}bg-success{% else %}bg-secondary{% endif %}">
+                            {{ t['status'] }}
+                        </span>
+                    </td>
+                    <td><small>{{ t['deadline'] or '—' }}</small></td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <a href="{{ url_for('tasks.edit', task_id=t['id']) }}" class="btn btn-outline-primary" title="Ред.">✎</a>
+                            <form method="POST" action="{{ url_for('tasks.delete', task_id=t['id']) }}" class="d-inline" onsubmit="return confirm('Удалить?')">
+                                <button type="submit" class="btn btn-outline-danger" title="Удалить">✕</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not tasks %}
+                <tr><td colspan="7" class="text-center text-muted py-4">Нет задач</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

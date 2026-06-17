@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Игроки — AURUS{% endblock %}
+{% block page_title %}Игроки{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex gap-2">
+        <span class="text-muted">Показано {{ players|length }} из {{ total }}</span>
+        <select class="form-select form-select-sm" style="width:auto;" onchange="window.location='?status='+this.value">
+            <option value="">Все статусы</option>
+            {% for s in ['Актив', 'Обычный участник', 'Новичок', 'Спящий', 'Под вопросом'] %}
+            <option value="{{ s }}" {% if request.args.get('status') == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <a href="{{ url_for('players.create') }}" class="btn btn-sm" style="background:var(--accent);color:#fff;">+ Игрок</a>
+</div>
+
+<div class="panel">
+    <div class="panel-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:40px;">№</th>
+                    <th data-sort="text">Игрок</th>
+                    <th data-sort="text">Имя</th>
+                    <th data-sort="text">Страна</th>
+                    <th data-sort="text">Звание</th>
+                    <th data-sort="text">Роль</th>
+                    <th data-sort="text">Расы</th>
+                    <th data-sort="text">Направление</th>
+                    <th data-sort="num">Очки</th>
+                    <th data-sort="text">Активность</th>
+                    <th data-sort="text">Статус</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in players %}
+                <tr class="{% if p['races'] %}race-row-{{ p['races'].split(',')[0]|lower }}{% endif %}">
+                    <td class="text-muted">{{ loop.index }}</td>
+                    <td>
+                        <a href="{{ url_for('players.card', player_id=p['id']) }}" class="link-accent fw-semibold">
+                            {{ p['nick'] }}
+                        </a>
+                    </td>
+                    <td><small class="text-muted">{{ p['name'] or '—' }}</small></td>
+                    <td>
+                        {% if p['country'] %}
+                        <small>{{ p['country']|country_flag }}{{ p['country'] }}</small>
+                        {% else %}<small class="text-muted">—</small>{% endif %}
+                    </td>
+                    <td><small>{{ p['rank_in_game'] or '—' }}</small></td>
+                    <td>
+                        {% if p['role'] %}
+                        <span class="role-badge role-{% if 'Глава' in p['role'] or 'Лидер' in p['role'] %}leader{% elif 'Заместитель' in p['role'] %}deputy{% elif 'СОВЕТ' in p['role'] %}council{% elif 'Куратор' in p['role'] %}officer{% else %}member{% endif %}">
+                            {{ p['role'] }}
+                        </span>
+                        {% else %}<small class="text-muted">—</small>{% endif %}
+                    </td>
+                    <td>
+                        {% if p['races'] %}
+                        {% for r in p['races'].split(',') %}
+                        <span class="badge-race badge-{{ r|lower }}">{{ r }}</span>
+                        {% endfor %}
+                        {% else %}<small class="text-muted">—</small>{% endif %}
+                    </td>
+                    <td><small>{{ p['direction'] or '—' }}</small></td>
+                    <td>{{ '{:,}'.format(p['points'] or 0).replace(',', ' ') }}</td>
+                    <td>
+                        {% if 'Активен' in (p['activity'] or '') %}
+                        <span class="badge-status badge-online">Онлайн</span>
+                        {% elif 'Недавно' in (p['activity'] or '') %}
+                        <span class="badge-status badge-recent">Недавно</span>
+                        {% elif 'Давно' in (p['activity'] or '') %}
+                        <span class="badge-status badge-sleeping">Давно</span>
+                        {% else %}
+                        <small class="text-muted">{{ p['activity'] or '—' }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge-status {% if p['player_status'] == 'Актив' %}badge-online{% elif p['player_status'] == 'Спящий' %}badge-sleeping{% elif p['player_status'] == 'Под вопросом' %}badge-question{% else %}badge-recent{% endif %}">
+                            {{ p['player_status'] or '—' }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

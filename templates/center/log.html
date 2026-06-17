@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Журнал — AURUS{% endblock %}
+{% block page_title %}Журнал событий{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <span class="text-muted">{{ events|length }} событий</span>
+    <a href="{{ url_for('center.create_log') }}" class="btn btn-sm" style="background:var(--accent);color:#fff;">+ Событие</a>
+</div>
+<div class="panel">
+    <div class="panel-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:120px;">Дата</th>
+                    <th style="width:100px;">Тип</th>
+                    <th>Событие</th>
+                    <th style="width:100px;">Автор</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in events %}
+                <tr>
+                    <td><small class="text-muted">{{ e['event_date'] or '' }}</small></td>
+                    <td>
+                        <span class="badge {% if e['event_type'] == 'Проблема' %}bg-danger{% elif e['event_type'] == 'Решение' %}bg-success{% elif e['event_type'] == 'Игрок' %}bg-info{% elif e['event_type'] == 'Военное' %}bg-warning text-dark{% elif e['event_type'] == 'Создание' %}bg-primary{% else %}bg-secondary{% endif %}">
+                            {{ e['event_type'] }}
+                        </span>
+                    </td>
+                    <td>
+                        <strong>{{ e['title'] }}</strong>
+                        {% if e['description'] %}<br><small class="text-muted">{{ e['description'][:120] }}{% if e['description']|length > 120 %}...{% endif %}</small>{% endif %}
+                        {% if e['related_player'] %}<br><small class="text-muted">Игрок: {{ e['related_player'] }}</small>{% endif %}
+                    </td>
+                    <td><small>{{ e['author'] or '—' }}</small></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

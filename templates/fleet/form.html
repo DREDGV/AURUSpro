@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{% if ship %}Редактирование{% else %}Новый корабль{% endif %} — AURUS{% endblock %}
+{% block page_title %}{% if ship %}Редактирование: {{ ship['account_nick'] }}{% else %}Добавить корабль{% endif %}{% endblock %}
+{% block content %}
+<div class="mb-3">
+    <a href="{{ url_for('fleet.list') }}" class="btn btn-sm btn-outline-secondary">← Назад</a>
+</div>
+<form method="POST" class="col-md-8">
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label class="form-label fw-semibold">Игрок *</label>
+            <select name="player_id" class="form-select" required>
+                <option value="">Выберите...</option>
+                {% for p in players %}
+                <option value="{{ p['id'] }}" {% if ship and ship['player_id'] == p['id'] %}selected{% endif %}>{{ p['nick'] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label class="form-label fw-semibold">Аккаунт (ник в игре)</label>
+            <input type="text" name="account_nick" class="form-control" value="{{ ship['account_nick'] if ship else '' }}">
+        </div>
+        <div class="col-md-4 mb-3">
+            <label class="form-label fw-semibold">Раса</label>
+            <select name="race" class="form-select">
+                {% for r in ['', 'Терран', 'Жук', 'Тосс'] %}
+                <option value="{{ r }}" {% if ship and ship['race'] == r %}selected{% endif %}>{{ r or '—' }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4 mb-3">
+            <label class="form-label fw-semibold">Боевой флот</label>
+            <input type="number" name="combat_power" class="form-control" value="{{ ship['combat_power'] if ship else 0 }}">
+        </div>
+        <div class="col-md-4 mb-3">
+            <label class="form-label fw-semibold">Раб-флот</label>
+            <input type="number" name="slave_fleet" class="form-control" value="{{ ship['slave_fleet'] if ship else 0 }}">
+        </div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Возможности</label>
+        <div class="d-flex gap-3">
+            <div class="form-check">
+                <input type="checkbox" name="can_attack" class="form-check-input" {% if ship and ship['can_attack'] %}checked{% endif %}>
+                <label class="form-check-label">Атака</label>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" name="can_slaves" class="form-check-input" {% if ship and ship['can_slaves'] %}checked{% endif %}>
+                <label class="form-check-label">Рабы</label>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" name="can_lunar" class="form-check-input" {% if ship and ship['can_lunar'] %}checked{% endif %}>
+                <label class="form-check-label">Луна</label>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" name="can_clean_worms" class="form-check-input" {% if ship and ship['can_clean_worms'] %}checked{% endif %}>
+                <label class="form-check-label">Ишки</label>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label class="form-label fw-semibold">Достоверность данных</label>
+            <select name="data_reliability" class="form-select">
+                {% for r in ['Точные', 'Приблизительно', 'Устаревшие', 'От игрока'] %}
+                <option value="{{ r }}" {% if ship and ship['data_reliability'] == r %}selected{% endif %}>{{ r }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Комментарий</label>
+        <textarea name="comment" class="form-control" rows="2">{{ ship['comment'] if ship else '' }}</textarea>
+    </div>
+    <button type="submit" class="btn" style="background:var(--accent);color:#fff;">{% if ship %}Сохранить{% else %}Добавить{% endif %}</button>
+    <a href="{{ url_for('fleet.list') }}" class="btn btn-secondary">Отмена</a>
+</form>
+{% endblock %}

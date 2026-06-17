@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Новый запрос — AURUS{% endblock %}
+{% block page_title %}Новый запрос{% endblock %}
+{% block content %}
+<form method="POST" class="col-md-8">
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Название *</label>
+        <input type="text" name="title" class="form-control" required>
+    </div>
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Игрок</label>
+            <select name="player_id" class="form-select">
+                <option value="">— Не привязан —</option>
+                {% for p in players %}
+                <option value="{{ p['id'] }}">{{ p['nick'] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Тип</label>
+            <select name="request_type" class="form-select">
+                {% for t in ['Ресурсы', 'Совет', 'Защита', 'Наставничество', 'Техническая', 'Другое'] %}
+                <option value="{{ t }}">{{ t }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Приоритет</label>
+            <select name="priority" class="form-select">
+                {% for p in ['Критический', 'Высокий', 'Средний', 'Низкий'] %}
+                <option value="{{ p }}">{{ p }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Описание</label>
+        <textarea name="description" class="form-control" rows="4"></textarea>
+    </div>
+    <div class="mb-3">
+        <label class="form-label fw-semibold">Ответственный</label>
+        <input type="text" name="assignee" class="form-control" placeholder="Кто будет решать">
+    </div>
+    <button type="submit" class="btn" style="background:var(--accent);color:#fff;">Создать</button>
+    <a href="{{ url_for('center.requests_list') }}" class="btn btn-secondary">Отмена</a>
+</form>
+{% endblock %}

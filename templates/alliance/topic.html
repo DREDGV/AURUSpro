@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ topic['title'] }} — AURUS{% endblock %}
+{% block page_title %}{{ topic['title'] }}{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="panel mb-3">
+            <div class="panel-body">
+                <p>{{ topic['description'] or '—' }}</p>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <h6>Обсуждение ({{ messages|length }})</h6>
+            </div>
+            <div class="panel-body">
+                {% for msg in messages %}
+                <div class="message-item mb-3 p-3 rounded" style="background:var(--bg-main);">
+                    <div class="d-flex justify-content-between mb-1">
+                        <strong>{{ msg['author'] }}</strong>
+                        <small class="text-muted">{{ msg['message_date'] or '' }}</small>
+                    </div>
+                    <p class="mb-0 mt-2" style="white-space:pre-wrap;">{{ msg['message_text'] }}</p>
+                </div>
+                {% endfor %}
+                {% if not messages %}
+                <p class="text-muted text-center">Нет сообщений</p>
+                {% endif %}
+
+                <form method="POST" action="{{ url_for('alliance.add_message', topic_id=topic['id']) }}" class="mt-3">
+                    <div class="mb-2">
+                        <textarea name="message_text" class="form-control" rows="3" placeholder="Добавить сообщение..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-sm" style="background:var(--accent);color:#fff;">Отправить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="panel mb-3">
+            <div class="panel-header">
+                <h6>Информация</h6>
+            </div>
+            <div class="panel-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Категория:</span>
+                    <span>{{ topic['category'] or '—' }}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Приоритет:</span>
+                    <span class="badge {% if topic['priority'] == 'Критический' %}bg-danger{% elif topic['priority'] == 'Высокий' %}bg-warning text-dark{% elif topic['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">
+                        {{ topic['priority'] or '—' }}
+                    </span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Статус:</span>
+                    <span class="badge {% if topic['status'] == 'Открыто' %}bg-primary{% elif topic['status'] == 'В работе' %}bg-warning text-dark{% elif topic['status'] == 'Решено' %}bg-success{% else %}bg-secondary{% endif %}">
+                        {{ topic['status'] or '—' }}
+                    </span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Участники:</span>
+                    <span>{{ topic['participants'] or '—' }}</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">Создатель:</span>
+                    <span>{{ topic['created_by'] or '—' }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

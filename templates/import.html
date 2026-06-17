@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Импорт — AURUS{% endblock %}
+{% block content %}
+<h2>Импорт из Excel</h2>
+<div class="col-md-6 mt-4">
+    <form method="POST" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label class="form-label">Выберите файл Excel (.xlsx)</label>
+            <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Импортировать</button>
+        <a href="{{ url_for('export.index') }}" class="btn btn-secondary">Отмена</a>
+    </form>
+    <div class="mt-3">
+        <small class="text-muted">
+            Файл должен содержать лист «Игроки» в формате текущего реестра.
+            Дубликаты по нику будут пропущены.
+        </small>
+    </div>
+</div>
+{% endblock %}

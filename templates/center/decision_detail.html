@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}{{ decision['title'] }} — AURUS{% endblock %}
+{% block page_title %}{{ decision['title'] }}{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="panel mb-3">
+            <div class="panel-header">
+                <h6>Детали решения</h6>
+                <a href="{{ url_for('center.decisions') }}" class="btn btn-sm btn-outline-secondary">← Назад</a>
+            </div>
+            <div class="panel-body">
+                <div class="d-flex gap-2 mb-3">
+                    <span class="badge {% if decision['status'] == 'Предложено' %}bg-primary{% elif decision['status'] == 'Согласовано' %}bg-warning text-dark{% elif decision['status'] == 'Выполнено' %}bg-success{% else %}bg-secondary{% endif %}">
+                        {{ decision['status'] }}
+                    </span>
+                    <span class="badge {% if decision['priority'] == 'Высокий' %}bg-warning text-dark{% elif decision['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">
+                        {{ decision['priority'] or '—' }}
+                    </span>
+                </div>
+                {% if decision['description'] %}
+                <p>{{ decision['description'] }}</p>
+                {% endif %}
+                <hr>
+                <div class="row">
+                    <div class="col-md-6">
+                        <small class="text-muted">Предложил:</small> <strong>{{ decision['proposer'] or '—' }}</strong>
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-muted">Создатель записи:</small> <strong>{{ decision['created_by'] or '—' }}</strong>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-6">
+                        <small class="text-muted">Срок:</small> {{ decision['deadline'] or '—' }}
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-muted">Создано:</small> {{ decision['created_at'] or '—' }}
+                    </div>
+                </div>
+                {% if decision['result'] %}
+                <hr>
+                <div class="p-3 rounded" style="background:rgba(40,167,69,0.1); border-left:3px solid var(--success);">
+                    <strong>Результат:</strong><br>{{ decision['result'] }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if related_log %}
+        <div class="panel">
+            <div class="panel-header">
+                <h6>Связанные события</h6>
+            </div>
+            <div class="panel-body p-0">
+                <table class="table table-hover mb-0">
+                    <tbody>
+                        {% for e in related_log %}
+                        <tr>
+                            <td><small class="text-muted">{{ e['event_date'] or '' }}</small></td>
+                            <td><span class="badge bg-secondary" style="font-size:10px;">{{ e['event_type'] }}</span></td>
+                            <td><strong>{{ e['title'] }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-md-4">
+        <div class="panel">
+            <div class="panel-header">
+                <h6>Управление</h6>
+            </div>
+            <div class="panel-body">
+                <form method="POST" action="{{ url_for('center.update_decision', decision_id=decision['id']) }}">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Статус</label>
+                        <select name="status" class="form-select">
+                            {% for s in ['Предложено', 'Согласовано', 'Выполнено', 'Отменено'] %}
+                            <option value="{{ s }}" {% if decision['status'] == s %}selected{% endif %}>{{ s }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Приоритет</label>
+                        <select name="priority" class="form-select">
+                            {% for p in ['Высокий', 'Средний', 'Низкий'] %}
+                            <option value="{{ p }}" {% if decision['priority'] == p %}selected{% endif %}>{{ p }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Срок</label>
+                        <input type="text" name="deadline" class="form-control" value="{{ decision['deadline'] or '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Результат</label>
+                        <textarea name="result" class="form-control" rows="3">{{ decision['result'] or '' }}</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Сохранить</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

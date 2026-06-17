@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Экспорт — AURUS{% endblock %}
+{% block content %}
+<h2>Экспорт данных</h2>
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5>Игроки → Excel</h5>
+                <p class="text-muted">Список всех игроков в формате .xlsx</p>
+                <a href="{{ url_for('export.players', fmt='xlsx') }}" class="btn btn-primary">Скачать XLSX</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5>Игроки → CSV</h5>
+                <p class="text-muted">Список всех игроков в формате .csv</p>
+                <a href="{{ url_for('export.players', fmt='csv') }}" class="btn btn-success">Скачать CSV</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <h5>Игроки → HTML</h5>
+                <p class="text-muted">Красивая HTML-таблица для просмотра</p>
+                <a href="{{ url_for('export.players', fmt='html') }}" class="btn btn-info">Скачать HTML</a>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card border-warning">
+            <div class="card-body text-center">
+                <h5>Импорт из Excel</h5>
+                <p class="text-muted">Загрузить данные из реестра .xlsx</p>
+                <a href="{{ url_for('export.import_excel') }}" class="btn btn-warning">Импортировать</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

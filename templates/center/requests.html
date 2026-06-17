@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Запросы — AURUS{% endblock %}
+{% block page_title %}Запросы и обращения{% endblock %}
+{% block content %}
+
+<div class="stats-row mb-3">
+    <div class="stat-card" style="cursor:pointer;" onclick="window.location='?status='">
+        <div class="stat-value">{{ stats.total }}</div>
+        <div class="stat-label">Всего</div>
+    </div>
+    <div class="stat-card" style="cursor:pointer;border-left:3px solid var(--danger);" onclick="window.location='?status=Новый'">
+        <div class="stat-value text-danger">{{ stats.new }}</div>
+        <div class="stat-label">Новых</div>
+    </div>
+    <div class="stat-card" style="cursor:pointer;border-left:3px solid var(--warning);" onclick="window.location='?status=В работе'">
+        <div class="stat-value" style="color:#e67e22;">{{ stats.in_work }}</div>
+        <div class="stat-label">В работе</div>
+    </div>
+    <div class="stat-card" style="cursor:pointer;border-left:3px solid #6c757d;" onclick="window.location='?status=На паузе'">
+        <div class="stat-value text-secondary">{{ stats.paused }}</div>
+        <div class="stat-label">На паузе</div>
+    </div>
+    <div class="stat-card" style="cursor:pointer;border-left:3px solid var(--success);" onclick="window.location='?status=Выполнен'">
+        <div class="stat-value text-success">{{ stats.resolved }}</div>
+        <div class="stat-label">Решено</div>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex gap-2">
+        <select class="form-select form-select-sm" style="width:auto;" onchange="applyFilter()">
+            <option value="">Все типы</option>
+            {% for t in ['Ресурсы', 'Совет', 'Защита', 'Наставничество', 'Техническая', 'Другое'] %}
+            <option value="{{ t }}" {% if current_type == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <a href="{{ url_for('center.create_request') }}" class="btn btn-sm" style="background:var(--accent);color:#fff;">+ Запрос</a>
+</div>
+
+<div class="panel">
+    <div class="panel-body p-0">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th style="width:50px;">#</th>
+                    <th>Запрос</th>
+                    <th>Игрок</th>
+                    <th>Тип</th>
+                    <th>Приоритет</th>
+                    <th>Статус</th>
+                    <th>Ответственный</th>
+                    <th style="width:120px;">Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in requests %}
+                <tr>
+                    <td class="text-muted">{{ r['id'] }}</td>
+                    <td>
+                        <a href="{{ url_for('center.request_detail', request_id=r['id']) }}" class="link-accent fw-semibold">{{ r['title'] }}</a>
+                        {% if r['description'] %}<br><small class="text-muted">{{ r['description'][:50] }}{% if r['description']|length > 50 %}...{% endif %}</small>{% endif %}
+                    </td>
+                    <td><small>{{ r['player_nick'] or '—' }}</small></td>
+                    <td><small>{{ r['request_type'] or '—' }}</small></td>
+                    <td><span class="badge {% if r['priority'] == 'Критический' %}bg-danger{% elif r['priority'] == 'Высокий' %}bg-warning text-dark{% elif r['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}" style="font-size:10px;">{{ r['priority'] }}</span></td>
+                    <td><span class="badge {% if r['status'] == 'Новый' %}bg-danger{% elif r['status'] == 'В работе' %}bg-warning text-dark{% elif r['status'] == 'На паузе' %}bg-secondary{% elif r['status'] == 'Ожидает' %}bg-info{% elif r['status'] == 'Выполнен' %}bg-success{% else %}bg-dark{% endif %}">{{ r['status'] }}</span></td>
+                    <td><small>{{ r['assignee'] or '—' }}</small></td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-success" title="В работу" onclick="setStatus({{ r['id'] }}, 'В работе')">▶</button>
+                            <button class="btn btn-outline-secondary" title="На паузу" onclick="setStatus({{ r['id'] }}, 'На паузе')">⏸</button>
+                            <button class="btn btn-outline-info" title="Ожидает" onclick="setStatus({{ r['id'] }}, 'Ожидает')">⏳</button>
+                            <button class="btn btn-outline-success" title="Выполнено" onclick="setStatus({{ r['id'] }}, 'Выполнен')">✓</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not requests %}
+                <tr><td colspan="8" class="text-center text-muted py-4">Нет запросов</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setStatus(requestId, newStatus) {
+    fetch('/center/ajax/request/' + requestId + '/status', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status: newStatus})
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) { if (data.status === 'ok') location.reload(); });
+}
+
+function applyFilter() {
+    var type = document.querySelector('select').value;
+    var url = new URL(window.location);
+    if (type) url.searchParams.set('type', type); else url.searchParams.delete('type');
+    window.location = url;
+}
+</script>
+{% endblock %}

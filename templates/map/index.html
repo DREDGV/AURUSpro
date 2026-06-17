@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Карта — AURUS{% endblock %}
+{% block page_title %}Карта альянса{% endblock %}
+{% block content %}
+
+<div class="row g-3" style="margin:-1rem -0.75rem;">
+    <div class="col-md-2">
+        <div class="panel p-3" style="height:calc(100vh - 120px);overflow-y:auto;">
+            <h6 class="mb-3"><i class="bi bi-map"></i> Управление картой</h6>
+
+            <div class="mb-3">
+                <input type="text" id="map-search" class="form-control form-control-sm" placeholder="Поиск игрока или объекта...">
+            </div>
+
+            <div class="mb-3">
+                <small class="text-muted fw-bold text-uppercase" style="font-size:10px;">Игроки</small>
+                <div class="form-check form-check-sm mt-1">
+                    <input class="form-check-input" type="checkbox" id="filter-terran" checked>
+                    <label class="form-check-label" for="filter-terran"><span style="color:#3498db;">■</span> Terran</label>
+                </div>
+                <div class="form-check form-check-sm">
+                    <input class="form-check-input" type="checkbox" id="filter-zerg" checked>
+                    <label class="form-check-label" for="filter-zerg"><span style="color:#e74c3c;">■</span> Zerg</label>
+                </div>
+                <div class="form-check form-check-sm">
+                    <input class="form-check-input" type="checkbox" id="filter-toss" checked>
+                    <label class="form-check-label" for="filter-toss"><span style="color:#f1c40f;">■</span> Protoss</label>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <small class="text-muted fw-bold text-uppercase" style="font-size:10px;">Объекты</small>
+                <div class="form-check form-check-sm mt-1">
+                    <input class="form-check-input" type="checkbox" id="filter-ops" checked>
+                    <label class="form-check-label" for="filter-ops"><span style="color:#e67e22;">■</span> ОПС</label>
+                </div>
+                <div class="form-check form-check-sm">
+                    <input class="form-check-input" type="checkbox" id="filter-alstation" checked>
+                    <label class="form-check-label" for="filter-alstation"><span style="color:#2ecc71;">■</span> Алстанция</label>
+                </div>
+                <div class="form-check form-check-sm">
+                    <input class="form-check-input" type="checkbox" id="filter-dunya" checked>
+                    <label class="form-check-label" for="filter-dunya"><span style="color:#1abc9c;">■</span> Дуня</label>
+                </div>
+                <div class="form-check form-check-sm">
+                    <input class="form-check-input" type="checkbox" id="filter-luna" checked>
+                    <label class="form-check-label" for="filter-luna"><span style="color:#9b59b6;">■</span> Луна</label>
+                </div>
+                <div class="form-check form-check-sm">
+                    <input class="form-check-input" type="checkbox" id="filter-vrata" checked>
+                    <label class="form-check-label" for="filter-vrata"><span style="color:#e84393;">■</span> Врата</label>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <small class="text-muted fw-bold text-uppercase" style="font-size:10px;">Отображение</small>
+                <div class="form-check form-check-sm mt-1">
+                    <input class="form-check-input" type="checkbox" id="filter-grid" checked>
+                    <label class="form-check-label" for="filter-grid">Сетка координат</label>
+                </div>
+                <div class="form-check form-check-sm">
+                    <input class="form-check-input" type="checkbox" id="filter-coverage" checked>
+                    <label class="form-check-label" for="filter-coverage">Зоны покрытия</label>
+                </div>
+            </div>
+
+            <div class="d-grid gap-2 mb-3">
+                <button id="btn-home" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-house"></i> Центр (2500:2500)
+                </button>
+                <div class="btn-group btn-group-sm">
+                    <button id="btn-zoom-in" class="btn btn-outline-secondary"><i class="bi bi-plus-lg"></i></button>
+                    <button id="btn-zoom-out" class="btn btn-outline-secondary"><i class="bi bi-dash-lg"></i></button>
+                </div>
+                <button id="btn-export" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-download"></i> Экспорт PNG
+                </button>
+            </div>
+
+            <hr>
+            <small class="text-muted fw-bold text-uppercase" style="font-size:10px;">Легенда</small>
+            <ul class="list-unstyled mt-2 mb-0" style="font-size:12px;">
+                <li class="mb-1"><span style="color:#3498db;">●</span> Terran</li>
+                <li class="mb-1"><span style="color:#e74c3c;">●</span> Zerg</li>
+                <li class="mb-1"><span style="color:#f1c40f;">●</span> Protoss</li>
+                <li class="mb-1"><span style="color:#e67e22;">■</span> ОПС</li>
+                <li class="mb-1"><span style="color:#2ecc71;">■</span> Алстанция</li>
+                <li class="mb-1"><span style="color:#1abc9c;">■</span> Дуня</li>
+                <li class="mb-1"><span style="color:#9b59b6;">■</span> Луна</li>
+                <li class="mb-1"><span style="color:#e84393;">◆</span> Врата</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="col-md-10">
+        <div class="panel p-0" style="position:relative;height:calc(100vh - 120px);overflow:hidden;">
+            <canvas id="map-canvas" style="width:100%;height:100%;background:#0a0e14;display:block;"></canvas>
+            <div id="map-tooltip" style="display:none;position:absolute;pointer-events:none;background:rgba(26,29,35,0.95);color:#fff;padding:8px 12px;border-radius:6px;font-size:12px;border:1px solid rgba(108,92,231,0.4);z-index:10;max-width:250px;"></div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+{% endblock %}
