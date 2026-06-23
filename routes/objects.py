@@ -11,7 +11,7 @@ def list():
     db = get_db()
     obj_type = request.args.get('type', '')
     query_str = request.args.get('q', '')
-    q = 'SELECT o.*, p.nick as player_nick FROM game_objects o LEFT JOIN players p ON o.player_id = p.id WHERE 1=1'
+    q = 'SELECT o.id, o.player_id, o.object_type, o.name, o.coordinates, o.sector, o.level, o.value, o.status, o.controlled, o.needs_protection, o.needs_development, o.comment, p.nick as player_nick FROM game_objects o LEFT JOIN players p ON o.player_id = p.id WHERE 1=1'
     params = []
     if obj_type:
         q += ' AND o.object_type = ?'
