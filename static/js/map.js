@@ -58,19 +58,7 @@ class GameMap {
             if (menu && menu.style.display === 'block' && !menu.contains(e.target)) {
                 this.hideContextMenu();
             }
-        }, true);
-        const menuEl = document.getElementById('map-context-menu');
-        if (menuEl) {
-            menuEl.addEventListener('mousedown', e => {
-                e.stopPropagation();
-                const item = e.target.closest('.ctx-item');
-                if (!item) return;
-                const action = item.dataset.action;
-                if (action && typeof this['_ctx_' + action] === 'function') {
-                    this['_ctx_' + action]();
-                }
-            });
-        }
+        });
         const si = document.getElementById('map-search');
         if (si) si.addEventListener('input', e => this._onSearch(e));
         for (const id of Object.keys(this.filters)) {
@@ -718,6 +706,7 @@ class GameMap {
 
     _onContextMenu(e) {
         e.preventDefault();
+        e.stopPropagation();
         const r = this.canvas.getBoundingClientRect();
         const mx = e.clientX - r.left, my = e.clientY - r.top;
         const w = this.screenToWorld(mx, my);
@@ -746,31 +735,29 @@ class GameMap {
         html += '<div class="ctx-item" data-action="create_dunya"><i class="bi bi-moon"></i> Новая Дуня</div>';
 
         menu.innerHTML = html;
-        // Correct positioning using page coordinates
-        const menuWidth = 200;
-        const menuHeight = 200;
+
         let left = e.clientX;
         let top = e.clientY;
-        
-        // Check if menu would overflow right edge
-        if (left + menuWidth > window.innerWidth) {
-            left = window.innerWidth - menuWidth - 5;
-        }
-        // Check if menu would overflow bottom edge
-        if (top + menuHeight > window.innerHeight) {
-            top = window.innerHeight - menuHeight - 5;
-        }
-        // Ensure positive coordinates
+        if (left + 210 > window.innerWidth) left = window.innerWidth - 215;
+        if (top + 200 > window.innerHeight) top = window.innerHeight - 205;
         left = Math.max(5, left);
         top = Math.max(5, top);
-        
+
         menu.style.left = left + 'px';
         menu.style.top = top + 'px';
-        
-        // Сохраняем координаты контекстного меню
-        this.contextMenuX = left;
-        this.contextMenuY = top;
         menu.style.display = 'block';
+
+        const self = this;
+        menu.querySelectorAll('.ctx-item').forEach(function(item) {
+            item.addEventListener('mousedown', function(ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                const action = item.dataset.action;
+                if (action && typeof self['_ctx_' + action] === 'function') {
+                    self['_ctx_' + action]();
+                }
+            });
+        });
     }
 
     hideContextMenu() {
