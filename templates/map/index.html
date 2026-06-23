@@ -36,19 +36,19 @@
                 </div>
                 <div class="form-check form-check-sm">
                     <input class="form-check-input" type="checkbox" id="filter-alstation" checked>
-                    <label class="form-check-label" for="filter-alstation"><span style="color:#2ecc71;">■</span> Алстанция</label>
+                    <label class="form-check-label" for="filter-alstation"><span style="color:#e74c3c;">◆</span> Алстанция</label>
                 </div>
                 <div class="form-check form-check-sm">
                     <input class="form-check-input" type="checkbox" id="filter-dunya" checked>
-                    <label class="form-check-label" for="filter-dunya"><span style="color:#1abc9c;">■</span> Дуня</label>
+                    <label class="form-check-label" for="filter-dunya"><span style="color:#f39c12;">▲</span> Дуня</label>
                 </div>
                 <div class="form-check form-check-sm">
                     <input class="form-check-input" type="checkbox" id="filter-luna" checked>
-                    <label class="form-check-label" for="filter-luna"><span style="color:#9b59b6;">■</span> Луна</label>
+                    <label class="form-check-label" for="filter-luna"><span style="color:#95a5a6;">●</span> Луна</label>
                 </div>
                 <div class="form-check form-check-sm">
                     <input class="form-check-input" type="checkbox" id="filter-vrata" checked>
-                    <label class="form-check-label" for="filter-vrata"><span style="color:#e84393;">■</span> Врата</label>
+                    <label class="form-check-label" for="filter-vrata"><span style="color:#9b59b6;">★</span> Врата</label>
                 </div>
             </div>
 
@@ -66,8 +66,6 @@
 
             <div id="map-status" class="small text-muted mb-3">Loading map...</div>
 
-            <div id="map-coverage-info" class="mb-3 p-2 rounded" style="background:rgba(108,92,231,0.1);border:1px solid rgba(108,92,231,0.3);font-size:12px;display:none;"></div>
-
             <div class="d-grid gap-2 mb-3">
                 <button id="btn-home" class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-house"></i> Центр (2500:2500)
@@ -79,16 +77,15 @@
                 <button id="btn-export" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-download"></i> Экспорт PNG
                 </button>
-                <button id="btn-plan" class="btn btn-sm btn-outline-success"><i class="bi bi-broadcast-pin"></i> Plan stations</button>
                 <button id="btn-placement" class="btn btn-sm btn-outline-danger" onclick="window.map && window.map.togglePlacementMode()">
-                    <i class="bi bi-geo-alt"></i> Разместить алстанцию
+                    <i class="bi bi-geo-alt"></i> Разместить объект
                 </button>
             </div>
 
             <div id="placement-panel" class="mb-3 p-2 rounded" style="display:none;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);font-size:12px;">
                 <small class="text-danger fw-bold">РЕЖИМ РАЗМЕЩЕНИЯ</small>
                 <div class="mt-1">
-                    <label class="form-label mb-0">Уровень алстанции:</label>
+                    <label class="form-label mb-0">Уровень объекта:</label>
                     <input type="range" id="placement-level" class="form-range" min="1" max="20" value="10"
                            oninput="window.map.placementLevel=parseInt(this.value);document.getElementById('placement-level-val').textContent=this.value">
                     <div class="text-center"><span id="placement-level-val">10</span> ур. (радиус <span id="placement-radius-val">9000</span>)</div>
@@ -110,7 +107,7 @@
             </ul>
 
             <hr>
-            <small class="text-muted fw-bold text-uppercase" style="font-size:10px;">Алстанции на карте</small>
+            <small class="text-muted fw-bold text-uppercase" style="font-size:10px;">Объекты на карте</small>
             <div id="stations-list" class="mt-2" style="font-size:12px;"></div>
         </div>
     </div>

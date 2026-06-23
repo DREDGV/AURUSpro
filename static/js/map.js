@@ -3,9 +3,7 @@ class GameMap {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
         this.objects = [];
-        this.suggestions = [];
         this.meta = {};
-        this.showPlanner = false;
         this.area = {
             min_x: 2000, max_x: 3000,
             min_y: 2000, max_y: 3000,
@@ -78,8 +76,6 @@ class GameMap {
         if (zout) zout.addEventListener('click', () => this.zoomOut());
         const exp = document.getElementById('btn-export');
         if (exp) exp.addEventListener('click', () => this.exportPNG());
-        const plan = document.getElementById('btn-plan');
-        if (plan) plan.addEventListener('click', () => this.loadPlan());
     }
 
     worldToScreen(wx, wy) {
@@ -127,198 +123,16 @@ class GameMap {
         } catch (e) { console.error('Map data error:', e); }
     }
 
-    async loadPlan() {
-        try {
-            const corridorX = 2500;
-            const corridorY = 2560;
-            const resp = await fetch('/map/api/plan?level=10&corridor_x=' + corridorX + '&corridor_y=' + corridorY);
-            const data = await resp.json();
-            this.suggestions = data.suggestions || [];
-            this.coverage = data.coverage || {};
-            this.showPlanner = true;
-            this._updateCoverageStatus();
-            this.render();
-        } catch (e) { console.error('Map plan error:', e); }
-    }
-
-    _updateCoverageStatus() {
-        const el = document.getElementById('map-coverage-info');
-        if (!el || !this.coverage) return;
-        el.style.display = 'block';
-        const c = this.coverage;
-        el.innerHTML = `
-            <div class="mb-1"><strong>Покрытие сети:</strong> ${c.coverage_pct || 0}%</div>
-            <div class="mb-1">Игроков: ${c.total || 0} | Покрыто: ${c.covered || 0} | Без покрытия: ${c.uncovered || 0}</div>
-            <div class="mb-1"><small class="text-muted">Приоритет: коридор 2500:2500 → 2500:2560</small></div>
-            <div class="mb-1"><small class="text-muted">Расчётный уровень: 10 (радиус ${10 * 900} ед.)</small></div>
-        `;
-    }
-
     render() {
         const c = this.ctx;
         c.clearRect(0, 0, this.canvas.width, this.canvas.height);
         c.fillStyle = '#0a0e14';
         c.fillRect(0, 0, this.canvas.width, this.canvas.height);
         if (this.filters['filter-grid']) this.drawGrid();
-        if (this.showPlanner) this.drawCorridor();
         if (this.filters['filter-coverage']) this.drawCoverage();
-        if (this.showPlanner) this.drawUncoveredPlayers();
         this.drawSystems();
-        if (this.showPlanner) this.drawPlannerSuggestions();
         this.drawObjects();
         if (this.placementMode && this.ghostPos) this.drawGhost();
-    }
-
-    drawCorridor() {
-        const c = this.ctx;
-        const from = this.worldToScreen(this.systemToWorldX(2500), this.systemToWorldY(2500));
-        const to = this.worldToScreen(this.systemToWorldX(2560), this.systemToWorldY(2500));
-        c.save();
-        c.strokeStyle = 'rgba(241,196,15,0.5)';
-        c.lineWidth = 3;
-        c.setLineDash([12, 6]);
-        c.beginPath();
-        c.moveTo(from.x, from.y);
-        c.lineTo(to.x, to.y);
-        c.stroke();
-        c.setLineDash([]);
-        const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-        c.fillStyle = 'rgba(241,196,15,0.9)';
-        c.font = 'bold 11px sans-serif';
-        c.textAlign = 'center';
-        c.fillText('2500:2500 → 2500:2560', mid.x, mid.y - 10);
-        c.fillText('КОРИДОР ПРИОРИТЕТА', mid.x, mid.y + 4);
-        c.textAlign = 'left';
-        c.restore();
-    }
-
-    drawUncoveredPlayers() {
-        const c = this.ctx;
-        if (!this.coverage || !this.coverage.uncovered_points) return;
-        for (const p of this.coverage.uncovered_points) {
-            const sp = this.worldToScreen(p.wx, p.wy);
-            if (sp.x < -20 || sp.x > this.canvas.width + 20 ||
-                sp.y < -20 || sp.y > this.canvas.height + 20) continue;
-            c.save();
-            c.strokeStyle = '#e74c3c';
-            c.lineWidth = 2;
-            c.beginPath(); c.arc(sp.x, sp.y, 10, 0, Math.PI * 2); c.stroke();
-            c.strokeStyle = 'rgba(231,76,60,0.3)';
-            c.lineWidth = 1;
-            c.beginPath(); c.arc(sp.x, sp.y, 16, 0, Math.PI * 2); c.stroke();
-            c.restore();
-        }
-    }
-
-    drawGrid() {
-        const c = this.ctx;
-        const w = this.canvas.width, h = this.canvas.height;
-        const tl = this.screenToWorld(0, h);
-        const br = this.screenToWorld(w, 0);
-        const visibleMinX = Math.max(Math.min(tl.x, br.x), this.systemToWorldX(this.area.min_x));
-        const visibleMaxX = Math.min(Math.max(tl.x, br.x), this.systemToWorldX(this.area.max_x));
-        const visibleMinY = Math.max(Math.min(tl.y, br.y), this.systemToWorldY(this.area.min_y));
-        const visibleMaxY = Math.min(Math.max(tl.y, br.y), this.systemToWorldY(this.area.max_y));
-
-        const minSystemX = Math.floor(this.worldToSystemX(visibleMinX));
-        const maxSystemX = Math.ceil(this.worldToSystemX(visibleMaxX));
-        const minSystemY = Math.floor(this.worldToSystemY(visibleMinY));
-        const maxSystemY = Math.ceil(this.worldToSystemY(visibleMaxY));
-        const systemStep = this.scale >= 0.02 ? 1 : (this.scale >= 0.005 ? 10 : 100);
-
-        // Area border
-        const areaA = this.worldToScreen(this.systemToWorldX(this.area.min_y), this.systemToWorldY(this.area.min_x));
-        const areaB = this.worldToScreen(this.systemToWorldX(this.area.max_y), this.systemToWorldY(this.area.max_x));
-        c.strokeStyle = 'rgba(108,92,231,0.35)';
-        c.lineWidth = 2;
-        c.strokeRect(
-            Math.min(areaA.x, areaB.x),
-            Math.min(areaA.y, areaB.y),
-            Math.abs(areaB.x - areaA.x),
-            Math.abs(areaB.y - areaA.y)
-        );
-
-        // System lines
-        c.strokeStyle = 'rgba(255,255,255,0.08)';
-        c.lineWidth = 1;
-        for (let sx = this._snapDown(minSystemX, systemStep); sx <= maxSystemX; sx += systemStep) {
-            const s = this.worldToScreen(this.systemToWorldX(sx), 0);
-            c.beginPath(); c.moveTo(s.x, 0); c.lineTo(s.x, h); c.stroke();
-        }
-        for (let sy = this._snapDown(minSystemY, systemStep); sy <= maxSystemY; sy += systemStep) {
-            const s = this.worldToScreen(0, this.systemToWorldY(sy));
-            c.beginPath(); c.moveTo(0, s.y); c.lineTo(w, s.y); c.stroke();
-        }
-
-        // Labels
-        c.fillStyle = 'rgba(255,255,255,0.35)';
-        c.font = '9px monospace';
-        const labelStep = Math.max(systemStep, 100);
-        for (let sx = this._snapDown(minSystemX, labelStep); sx <= maxSystemX; sx += labelStep) {
-            for (let sy = this._snapDown(minSystemY, labelStep); sy <= maxSystemY; sy += labelStep) {
-                const s = this.worldToScreen(this.systemToWorldX(sx), this.systemToWorldY(sy));
-                if (s.x > 30 && s.x < w - 60 && s.y > 15 && s.y < h - 5) {
-                    c.fillText(`${sy}:${sx}`, s.x + 3, s.y - 3);
-                }
-            }
-        }
-    }
-
-    drawSystems() {
-        const c = this.ctx;
-        const systems = new Map();
-        for (const o of this.objects) {
-            const key = `${o.x}:${o.y}`;
-            if (!systems.has(key)) systems.set(key, []);
-            systems.get(key).push(o);
-        }
-
-        for (const [key, objs] of systems) {
-            const [sx, sy] = key.split(':').map(Number);
-            const sp = this.worldToScreen(objs[0].wx, objs[0].wy);
-            if (sp.x < -100 || sp.x > this.canvas.width + 100 ||
-                sp.y < -100 || sp.y > this.canvas.height + 100) continue;
-
-            // Sun
-            c.fillStyle = '#f1c40f';
-            c.beginPath(); c.arc(sp.x, sp.y, 3, 0, Math.PI * 2); c.fill();
-
-            // Orbits
-            for (let z = 1; z <= 9; z++) {
-                const r = z * 8;
-                c.strokeStyle = 'rgba(255,255,255,0.05)';
-                c.lineWidth = 0.3;
-                c.beginPath(); c.arc(sp.x, sp.y, r, 0, Math.PI * 2); c.stroke();
-            }
-
-            // Planets
-            for (const obj of objs) {
-                if (obj.z > 0 && obj.z <= 9) {
-                    const angle = ((obj.z - 1) / 9) * Math.PI * 2 - Math.PI / 2;
-                    const r = obj.z * 8;
-                    const px = sp.x + Math.cos(angle) * r;
-                    const py = sp.y + Math.sin(angle) * r;
-                    let col = '#95a5a6';
-                    if (obj.race === 'Терран') col = '#3498db';
-                    else if (obj.race === 'Жук') col = '#27ae60';
-                    else if (obj.race === 'Тосс') col = '#9b59b6';
-                    c.fillStyle = col;
-                    c.beginPath(); c.arc(px, py, 3, 0, Math.PI * 2); c.fill();
-                }
-            }
-
-            // System label
-            c.fillStyle = 'rgba(255,255,255,0.45)';
-            c.font = '9px monospace';
-            c.textAlign = 'center';
-            c.fillText(`${sx}:${sy}`, sp.x, sp.y + 16);
-            if (sx === 2500 && sy === 2500) {
-                c.fillStyle = 'rgba(108,92,231,0.8)';
-                c.font = 'bold 10px sans-serif';
-                c.fillText('===AURUS-SILA===', sp.x, sp.y + 28);
-            }
-            c.textAlign = 'left';
-        }
     }
 
     drawCoverage() {
@@ -360,40 +174,6 @@ class GameMap {
             c.fillStyle = '#fff'; c.font = 'bold 10px sans-serif'; c.textAlign = 'center';
             c.fillText(`${obj.name || 'Алстанция'} (${level}ур)`, sp.x, sp.y + 18);
             c.textAlign = 'left';
-        }
-    }
-
-    drawPlannerSuggestions() {
-        const c = this.ctx;
-        for (const item of this.suggestions) {
-            const sp = this.worldToScreen(item.wx, item.wy);
-            if (sp.x < -80 || sp.x > this.canvas.width + 80 ||
-                sp.y < -80 || sp.y > this.canvas.height + 80) continue;
-
-            const r = (item.radius || 100) * this.scale;
-            c.save();
-            c.strokeStyle = item.already_covered ? 'rgba(241,196,15,0.85)' : 'rgba(46,204,113,0.85)';
-            c.fillStyle = item.already_covered ? 'rgba(241,196,15,0.08)' : 'rgba(46,204,113,0.10)';
-            c.lineWidth = 2;
-            c.setLineDash([8, 4]);
-            c.beginPath(); c.arc(sp.x, sp.y, r, 0, Math.PI * 2); c.fill(); c.stroke();
-            c.setLineDash([]);
-
-            c.fillStyle = item.already_covered ? '#f1c40f' : '#2ecc71';
-            c.beginPath(); c.arc(sp.x, sp.y, 5, 0, Math.PI * 2); c.fill();
-
-            c.fillStyle = '#fff';
-            c.font = '10px sans-serif';
-            c.textAlign = 'center';
-            let label = item.x + ':' + item.y;
-            if (item.uncovered_players > 0) {
-                label += ' (+' + item.uncovered_players + ' без покрытия)';
-                c.fillStyle = '#e74c3c';
-            } else {
-                label += ' (' + item.covered_players + ')';
-            }
-            c.fillText(label, sp.x, sp.y - 10);
-            c.restore();
         }
     }
 
@@ -661,7 +441,7 @@ class GameMap {
             btn.classList.toggle('btn-outline-danger', !this.placementMode);
             btn.innerHTML = this.placementMode
                 ? '<i class="bi bi-x-lg"></i> Отменить размещение'
-                : '<i class="bi bi-geo-alt"></i> Разместить алстанцию';
+                : '<i class="bi bi-geo-alt"></i> Разместить объект';
         }
         const panel = document.getElementById('placement-panel');
         if (panel) panel.style.display = this.placementMode ? 'block' : 'none';
@@ -804,7 +584,7 @@ class GameMap {
 
     _ctx_create_station() {
         this.hideContextMenu();
-        this._openCreateModal('Алстанция', '');
+        this._openCreateModal('Алстанция', 'Алстанция');
     }
 
     _ctx_create_ops() {
@@ -938,20 +718,40 @@ class GameMap {
     _updateStationsList() {
         const el = document.getElementById('stations-list');
         if (!el) return;
-        const stations = this.objects.filter(o => o.type === 'object' && (o.subtype || '').includes('Алстанц'));
+        const stations = this.objects.filter(o => o.type === 'object');
         if (!stations.length) {
-            el.innerHTML = '<div class="text-muted small">Нет алстанций</div>';
+            el.innerHTML = '<div class="text-muted small">Нет объектов</div>';
             return;
         }
         const icons = { 'Алстанция': '◆', 'ОПС': '■', 'Дуня': '▲', 'Луна': '●', 'Врата': '★' };
+        const colors = { 'Алстанция': '#e74c3c', 'ОПС': '#e67e22', 'Дуня': '#f39c12', 'Луна': '#95a5a6', 'Врата': '#9b59b6' };
         el.innerHTML = stations.map(s => {
-            const icon = icons[s.subtype] || '◆';
-            const color = s.subtype === 'Алстанция' ? '#e74c3c' : s.subtype === 'ОПС' ? '#e67e22' : s.subtype === 'Дуня' ? '#f39c12' : '#bdc3c7';
-            return '<div class="d-flex justify-content-between align-items-center mb-1 py-1 border-bottom border-secondary" style="font-size:12px;">'
+            const subtype = s.subtype || 'Объект';
+            const icon = icons[subtype] || '●';
+            const color = colors[subtype] || '#bdc3c7';
+            return '<div class="d-flex justify-content-between align-items-center mb-1 py-1 border-bottom border-secondary obj-row" data-id="' + s.id + '" style="font-size:12px;cursor:pointer;">'
             + '<span><span style="color:' + color + ';">' + icon + '</span> <strong>' + (s.name || '?') + '</strong> [' + s.x + ':' + s.y + ':' + (s.z||0) + '] ур.' + s.level + '</span>'
-            + '<button class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="window.map._showStationEditor(window.map.objects.find(o=>o.id===' + s.id + '))"><i class="bi bi-pencil"></i></button>'
+            + '<button class="btn btn-sm btn-outline-secondary py-0 px-1 obj-edit-btn" data-id="' + s.id + '"><i class="bi bi-pencil"></i></button>'
             + '</div>';
         }).join('');
+        const self = this;
+        el.querySelectorAll('.obj-row').forEach(function(row) {
+            row.addEventListener('click', function(ev) {
+                if (ev.target.closest('.obj-edit-btn')) {
+                    const id = parseInt(row.dataset.id);
+                    const obj = self.objects.find(o => o.id === id);
+                    if (obj) self._showStationEditor(obj);
+                    return;
+                }
+                const id = parseInt(row.dataset.id);
+                const obj = self.objects.find(o => o.id === id);
+                if (obj) {
+                    self.centerOn(obj.wx || 0, obj.wy || 0);
+                    self.highlightedObj = obj;
+                    self.render();
+                }
+            });
+        });
     }
 }
 
