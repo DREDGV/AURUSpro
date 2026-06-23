@@ -64,6 +64,10 @@
                 </div>
             </div>
 
+            <div id="map-status" class="small text-muted mb-3">Loading map...</div>
+
+            <div id="map-coverage-info" class="mb-3 p-2 rounded" style="background:rgba(108,92,231,0.1);border:1px solid rgba(108,92,231,0.3);font-size:12px;display:none;"></div>
+
             <div class="d-grid gap-2 mb-3">
                 <button id="btn-home" class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-house"></i> Центр (2500:2500)
@@ -75,20 +79,39 @@
                 <button id="btn-export" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-download"></i> Экспорт PNG
                 </button>
+                <button id="btn-plan" class="btn btn-sm btn-outline-success"><i class="bi bi-broadcast-pin"></i> Plan stations</button>
+                <button id="btn-placement" class="btn btn-sm btn-outline-danger" onclick="window.map && window.map.togglePlacementMode()">
+                    <i class="bi bi-geo-alt"></i> Разместить алстанцию
+                </button>
+            </div>
+
+            <div id="placement-panel" class="mb-3 p-2 rounded" style="display:none;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);font-size:12px;">
+                <small class="text-danger fw-bold">РЕЖИМ РАЗМЕЩЕНИЯ</small>
+                <div class="mt-1">
+                    <label class="form-label mb-0">Уровень алстанции:</label>
+                    <input type="range" id="placement-level" class="form-range" min="1" max="20" value="10"
+                           oninput="window.map.placementLevel=parseInt(this.value);document.getElementById('placement-level-val').textContent=this.value">
+                    <div class="text-center"><span id="placement-level-val">10</span> ур. (радиус <span id="placement-radius-val">9000</span>)</div>
+                </div>
+                <small class="text-muted">Кликните на карту для размещения</small>
             </div>
 
             <hr>
             <small class="text-muted fw-bold text-uppercase" style="font-size:10px;">Легенда</small>
             <ul class="list-unstyled mt-2 mb-0" style="font-size:12px;">
                 <li class="mb-1"><span style="color:#3498db;">●</span> Terran</li>
-                <li class="mb-1"><span style="color:#e74c3c;">●</span> Zerg</li>
-                <li class="mb-1"><span style="color:#f1c40f;">●</span> Protoss</li>
+                <li class="mb-1"><span style="color:#27ae60;">●</span> Zerg</li>
+                <li class="mb-1"><span style="color:#8e44ad;">●</span> Protoss</li>
                 <li class="mb-1"><span style="color:#e67e22;">■</span> ОПС</li>
-                <li class="mb-1"><span style="color:#2ecc71;">■</span> Алстанция</li>
-                <li class="mb-1"><span style="color:#1abc9c;">■</span> Дуня</li>
-                <li class="mb-1"><span style="color:#9b59b6;">■</span> Луна</li>
-                <li class="mb-1"><span style="color:#e84393;">◆</span> Врата</li>
+                <li class="mb-1"><span style="color:#e74c3c;">◆</span> Алстанция</li>
+                <li class="mb-1"><span style="color:#f39c12;">▲</span> Дуня</li>
+                <li class="mb-1"><span style="color:#95a5a6;">●</span> Луна</li>
+                <li class="mb-1"><span style="color:#9b59b6;">★</span> Врата</li>
             </ul>
+
+            <hr>
+            <small class="text-muted fw-bold text-uppercase" style="font-size:10px;">Алстанции на карте</small>
+            <div id="stations-list" class="mt-2" style="font-size:12px;"></div>
         </div>
     </div>
 
@@ -100,8 +123,98 @@
     </div>
 </div>
 
+<div id="map-context-menu" style="display:none;position:fixed;z-index:9999;background:#1a1d23;border:1px solid rgba(108,92,231,0.5);border-radius:8px;padding:4px 0;min-width:200px;box-shadow:0 4px 16px rgba(0,0,0,0.5);pointer-events:auto;"></div>
+
+<div class="modal fade" id="stationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="background:#1a1d23;color:#fff;border:1px solid rgba(108,92,231,0.4);max-width:420px;margin:auto;">
+            <div class="modal-header border-secondary">
+                <h6 class="modal-title" id="st-modal-title">Алстанция</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="st-id">
+                <div class="mb-2">
+                    <label class="form-label mb-0" style="font-size:12px;">Название</label>
+                    <input type="text" id="st-name" class="form-control form-control-sm" placeholder="Название алстанции">
+                </div>
+                <div class="row g-2 mb-2">
+                    <div class="col-4">
+                        <label class="form-label mb-0" style="font-size:12px;">X</label>
+                        <input type="number" id="st-x" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label mb-0" style="font-size:12px;">Y</label>
+                        <input type="number" id="st-y" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label mb-0" style="font-size:12px;">Z</label>
+                        <input type="number" id="st-z" class="form-control form-control-sm" value="0">
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label mb-0" style="font-size:12px;">Уровень: <strong id="st-level-val">10</strong></label>
+                    <input type="range" id="st-level" class="form-range" min="1" max="20" value="10">
+                    <div class="d-flex justify-content-between" style="font-size:10px;color:#888;">
+                        <span>1</span><span>Радиус: <span id="st-radius-info">9000</span> ед.</span><span>20</span>
+                    </div>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label mb-0" style="font-size:12px;">Статус</label>
+                    <select id="st-status" class="form-select form-select-sm">
+                        <option value="Активен">Активен</option>
+                        <option value="Строится">Строится</option>
+                        <option value="Неактивен">Неактивен</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label mb-0" style="font-size:12px;">Комментарий</label>
+                    <textarea id="st-comment" class="form-control form-control-sm" rows="2" placeholder="Заметки..."></textarea>
+                </div>
+                <div id="st-drag-hint" class="text-center small text-muted" style="display:none;">
+                    <i class="bi bi-info-circle"></i> ПКМ на карте для перемещения
+                </div>
+            </div>
+            <div class="modal-footer border-secondary">
+                <button id="st-delete-btn" class="btn btn-sm btn-outline-danger me-auto" style="display:none;"
+                        onclick="window.map.deleteStation()">
+                    <i class="bi bi-trash"></i> Удалить
+                </button>
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button class="btn btn-sm btn-success" onclick="window.map.saveStation()">
+                    <i class="bi bi-check-lg"></i> Сохранить
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
+<style>
+.ctx-item {
+    padding: 6px 14px; cursor: pointer; font-size: 13px; color: #ddd;
+    display: flex; align-items: center; gap: 8px; transition: background 0.15s;
+}
+.ctx-item:hover { background: rgba(108,92,231,0.25); color: #fff; }
+.ctx-danger:hover { background: rgba(231,76,60,0.3); color: #e74c3c; }
+.ctx-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 3px 8px; }
+</style>
 <script src="{{ url_for('static', filename='js/map.js') }}"></script>
+<script>
+document.getElementById('st-level').addEventListener('input', function() {
+    const v = Math.max(1, Math.min(20, parseInt(this.value) || 1));
+    document.getElementById('st-level-val').textContent = v;
+    document.getElementById('st-radius-info').textContent = (v * 900) + ' ед.';
+});
+document.getElementById('placement-level').addEventListener('input', function() {
+    const v = parseInt(this.value);
+    document.getElementById('placement-level-val').textContent = v;
+    document.getElementById('placement-radius-val').textContent = v * 900;
+});
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() { if (window.map) window.map._updateStationsList(); }, 500);
+});
+</script>
 {% endblock %}
