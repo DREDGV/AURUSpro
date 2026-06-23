@@ -1,7 +1,7 @@
 import os
 
-APP_VERSION = '0.8.0'
-APP_DATE = '2026-06-16'
+APP_VERSION = '0.9.0'
+APP_DATE = '2026-06-24'
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
