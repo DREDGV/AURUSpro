@@ -1,3 +1,5 @@
+import re
+
 from flask import Blueprint, render_template, session, redirect, url_for, jsonify, request
 from utils.db import get_db
 from utils.map_engine import (
@@ -18,6 +20,225 @@ from utils.map_engine import (
 )
 
 map_bp = Blueprint('map', __name__)
+
+
+def _is_alstation_type(value):
+    text = value or ''
+    return 'Алстанц' in text or 'РђР»СЃС‚Р°РЅС†' in text
+
+
+_COORD_RE = re.compile(r'\[?(\d{1,4})\s*[:：]\s*(\d{1,4})\s*[:：]\s*(\d{1,2})\]?')
+_AL_WORDS = ('алстанц', 'альстанц', 'алк', 'альянс')
+_OPS_WORDS = ('опс', 'опорн')
+_GATE_WORDS = ('врат',)
+_MOON_WORDS = ('лун',)
+_DUNYA_WORDS = ('дун',)
+_PLAN_WORDS = ('план', 'стро', 'буду', 'хочу', 'кача', 'для ал', 'под ал')
+_LEVEL_WORDS = ('уровен', 'ур', 'lvl', 'level')
+
+
+def _coord_string(coords):
+    return '[%d:%d:%d]' % (coords['x'], coords['y'], coords['z'])
+
+
+def _has_any(text, words):
+    return any(word in text for word in words)
+
+
+def _number_tokens(text):
+    tokens = []
+    start = None
+    for idx, ch in enumerate(text):
+        if ch.isdigit():
+            if start is None:
+                start = idx
+        elif start is not None:
+            raw = text[start:idx]
+            tokens.append({'value': int(raw), 'start': start, 'end': idx})
+            start = None
+    if start is not None:
+        raw = text[start:]
+        tokens.append({'value': int(raw), 'start': start, 'end': len(text)})
+    return tokens
+
+
+def _infer_level(segment):
+    cleaned = _COORD_RE.sub(' ', segment.lower())
+    numbers = [n for n in _number_tokens(cleaned) if 1 <= n['value'] <= 20]
+    if not numbers:
+        return None
+
+    marker_positions = []
+    for word in _LEVEL_WORDS:
+        pos = cleaned.find(word)
+        while pos >= 0:
+            marker_positions.append(pos)
+            pos = cleaned.find(word, pos + len(word))
+    if marker_positions:
+        best = None
+        best_dist = 999
+        for n in numbers:
+            for pos in marker_positions:
+                dist = min(abs(n['start'] - pos), abs(n['end'] - pos))
+                if dist < best_dist:
+                    best_dist = dist
+                    best = n['value']
+        if best_dist <= 20:
+            return best
+
+    if _has_any(cleaned, _AL_WORDS + _GATE_WORDS):
+        suffixed = []
+        for n in numbers:
+            suffix = cleaned[n['end']:n['end'] + 2]
+            if suffix.startswith('а') or suffix.startswith('го'):
+                suffixed.append(n['value'])
+        if suffixed:
+            return max(suffixed)
+    return None
+
+
+def _kind_distance(segment, from_right=False):
+    text = segment.lower()
+    candidates = [
+        ('gate', _GATE_WORDS),
+        ('alstation', _AL_WORDS),
+        ('ops', _OPS_WORDS),
+        ('dunya', _DUNYA_WORDS),
+        ('moon', _MOON_WORDS),
+    ]
+    best = None
+    for kind, words in candidates:
+        for word in words:
+            pos = text.rfind(word) if from_right else text.find(word)
+            if pos < 0:
+                continue
+            dist = (len(text) - pos - len(word)) if from_right else pos
+            if best is None or dist < best[1]:
+                best = (kind, dist)
+    return best or ('unknown', 999)
+
+
+def _infer_kind(segment):
+    text = segment.lower()
+    if _has_any(text, _GATE_WORDS):
+        return 'gate'
+    if _has_any(text, _AL_WORDS):
+        return 'alstation'
+    if _has_any(text, _OPS_WORDS):
+        return 'ops'
+    if _has_any(text, _DUNYA_WORDS):
+        return 'dunya'
+    if _has_any(text, _MOON_WORDS):
+        return 'moon'
+    return 'unknown'
+
+
+def _object_kind(object_type):
+    text = (object_type or '').lower()
+    if _is_alstation_type(object_type):
+        return 'alstation'
+    if _has_any(text, _GATE_WORDS):
+        return 'gate'
+    if _has_any(text, _OPS_WORDS):
+        return 'ops'
+    if _has_any(text, _DUNYA_WORDS):
+        return 'dunya'
+    if _has_any(text, _MOON_WORDS):
+        return 'moon'
+    return 'object'
+
+
+def _source_text_rows(db):
+    rows = []
+    for row in db.execute(
+        'SELECT n.id, n.player_id, p.nick, n.content, n.created_at '
+        'FROM player_notes n LEFT JOIN players p ON p.id = n.player_id'
+    ).fetchall():
+        rows.append({
+            'source_type': 'note',
+            'source_id': row['id'],
+            'player_id': row['player_id'],
+            'player': row['nick'],
+            'text': row['content'] or '',
+            'date': row['created_at'] or '',
+        })
+    for row in db.execute(
+        'SELECT m.id, m.player_id, p.nick, m.account_nick, m.message_text, m.message_date '
+        'FROM messages m LEFT JOIN players p ON p.id = m.player_id'
+    ).fetchall():
+        rows.append({
+            'source_type': 'message',
+            'source_id': row['id'],
+            'player_id': row['player_id'],
+            'player': row['nick'] or row['account_nick'],
+            'text': row['message_text'] or '',
+            'date': row['message_date'] or '',
+        })
+    for row in db.execute(
+        'SELECT id, nick, comment, current_activity, desired_activity, can_help_with, needs_help_with FROM players'
+    ).fetchall():
+        for field in ('comment', 'current_activity', 'desired_activity', 'can_help_with', 'needs_help_with'):
+            if row[field]:
+                rows.append({
+                    'source_type': 'player.%s' % field,
+                    'source_id': row['id'],
+                    'player_id': row['id'],
+                    'player': row['nick'],
+                    'text': row[field],
+                    'date': '',
+                })
+    return rows
+
+
+def _extract_intel_facts(db):
+    facts = []
+    for source in _source_text_rows(db):
+        text = source['text']
+        matches = list(_COORD_RE.finditer(text))
+        for idx, match in enumerate(matches):
+            coords = parse_coordinates(match.group(0))
+            if not coords or not coords.get('normalized') or not in_alliance_area(coords):
+                continue
+
+            prev_end = matches[idx - 1].end() if idx > 0 else max(0, match.start() - 120)
+            next_start = matches[idx + 1].start() if idx + 1 < len(matches) else min(len(text), match.end() + 120)
+            before = text[prev_end:match.start()]
+            after = text[match.end():next_start]
+            before_kind, before_dist = _kind_distance(before, from_right=True)
+            after_kind, after_dist = _kind_distance(after, from_right=False)
+            after_starts_new_sentence = after.lstrip().startswith(('.', ';', '!', '?'))
+            if before_kind != 'unknown' and (after_starts_new_sentence or before_dist <= after_dist):
+                segment = before + match.group(0)
+                kind = before_kind
+            elif after_kind != 'unknown':
+                segment = match.group(0) + after
+                kind = after_kind
+            else:
+                segment = text[prev_end:next_start]
+                kind = _infer_kind(segment)
+            if kind == 'unknown':
+                continue
+
+            point = normalize_map_object({}, coords)
+            level = _infer_level(segment) if kind in ('alstation', 'gate') else None
+            facts.append({
+                'source_type': source['source_type'],
+                'source_id': source['source_id'],
+                'player_id': source['player_id'],
+                'player': source['player'],
+                'date': source['date'],
+                'kind': kind,
+                'level': level,
+                'planned': _has_any(segment.lower(), _PLAN_WORDS),
+                'coordinates': _coord_string(coords),
+                'x': coords['x'],
+                'y': coords['y'],
+                'z': coords['z'],
+                'wx': point['wx'],
+                'wy': point['wy'],
+                'snippet': ' '.join(segment.split())[:260],
+            })
+    return facts
 
 
 @map_bp.route('/map')
@@ -109,7 +330,7 @@ def api_data():
                 'player_id': g['player_id'],
                 'url': None
             }, coords)
-        if 'Алстанц' in (g['object_type'] or ''):
+        if _is_alstation_type(g['object_type']):
             item['radius'] = alstation_radius(g['level'])
         objects.append(item)
 
@@ -160,12 +381,14 @@ def api_plan():
     db = get_db()
 
     alstations = db.execute(
-        'SELECT o.name, o.coordinates, o.level '
-        'FROM game_objects o WHERE o.object_type = "Алстанция" AND o.coordinates != ""'
+        'SELECT o.name, o.object_type, o.coordinates, o.level '
+        'FROM game_objects o WHERE o.coordinates != ""'
     ).fetchall()
 
     existing = []
     for a in alstations:
+        if not _is_alstation_type(a['object_type']):
+            continue
         coords = parse_coordinates(a['coordinates'])
         if coords and is_map_ready(coords):
             level = a['level'] or 1
@@ -219,6 +442,86 @@ def api_plan():
                 'center_y': ALLIANCE_CENTER_Y,
             }
         }
+    })
+
+
+@map_bp.route('/map/api/intel')
+def api_intel():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    db = get_db()
+    facts = _extract_intel_facts(db)
+    objects = db.execute(
+        'SELECT g.id, g.player_id, p.nick AS player, g.object_type, g.name, g.coordinates, g.level, g.status '
+        'FROM game_objects g LEFT JOIN players p ON p.id = g.player_id '
+        'WHERE g.coordinates IS NOT NULL AND g.coordinates != ""'
+    ).fetchall()
+
+    by_coord = {}
+    skipped = []
+    for obj in objects:
+        coords = parse_coordinates(obj['coordinates'])
+        if not coords or not coords.get('normalized') or not in_alliance_area(coords):
+            skipped.append({
+                'id': obj['id'],
+                'name': obj['name'],
+                'object_type': obj['object_type'],
+                'coordinates': obj['coordinates'],
+                'level': obj['level'],
+                'player': obj['player'],
+            })
+            continue
+        key = _coord_string(coords)
+        by_coord.setdefault(key, []).append({
+            'id': obj['id'],
+            'player_id': obj['player_id'],
+            'player': obj['player'],
+            'object_type': obj['object_type'],
+            'kind': _object_kind(obj['object_type']),
+            'name': obj['name'],
+            'coordinates': key,
+            'level': obj['level'],
+            'status': obj['status'],
+        })
+
+    enriched = []
+    for fact in facts:
+        matches = by_coord.get(fact['coordinates'], [])
+        same_kind = [obj for obj in matches if obj['kind'] == fact['kind']]
+        relevant = same_kind
+        status = 'missing'
+        if same_kind:
+            status = 'found'
+            if fact['level'] and not any((obj.get('level') or 0) == fact['level'] for obj in same_kind):
+                status = 'level_mismatch'
+        item = dict(fact)
+        item['matches'] = relevant
+        item['same_coordinate_objects'] = matches
+        item['status'] = status
+        enriched.append(item)
+
+    dedup = {}
+    for item in enriched:
+        key = (item['kind'], item['coordinates'], item.get('player_id'), item['status'])
+        current = dedup.get(key)
+        if not current or (item.get('level') and not current.get('level')) or len(item['snippet']) > len(current['snippet']):
+            dedup[key] = item
+    result = list(dedup.values())
+    result.sort(key=lambda x: (x['status'] == 'found', x['kind'], x['coordinates'], x.get('player') or ''))
+
+    db.close()
+    return jsonify({
+        'facts': result,
+        'summary': {
+            'total': len(result),
+            'found': sum(1 for item in result if item['status'] == 'found'),
+            'missing': sum(1 for item in result if item['status'] == 'missing'),
+            'type_mismatch': sum(1 for item in result if item['status'] == 'type_mismatch'),
+            'level_mismatch': sum(1 for item in result if item['status'] == 'level_mismatch'),
+            'skipped_objects': len(skipped),
+        },
+        'skipped_objects': skipped[:50],
     })
 
 
