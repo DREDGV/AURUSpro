@@ -3,6 +3,8 @@ class GameMap {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.objects = [];
+    this.mapTasks = [];
+    this.networkIssues = [];
     this.meta = {};
     this.area = {
       min_x: 2000,
@@ -56,8 +58,10 @@ class GameMap {
       stationTypeBadges: true,
       cursorSnap: true,
       cursorSnapLabel: true,
+      cursorSnapLine: false,
       cursorSnapSize: 0.62,
       cursorSnapOpacity: 0.42,
+      cursorSnapLabelSize: 1.25,
     };
     this.nextPlanId = 1;
     this.selectedPlanId = null;
@@ -85,6 +89,7 @@ class GameMap {
       "filter-dunya": true,
       "filter-luna": true,
       "filter-vrata": true,
+      "filter-tasks": true,
       "filter-grid": true,
       "filter-coverage": true,
     };
@@ -95,6 +100,7 @@ class GameMap {
       this.render();
     });
     this._bindEvents();
+    this.drawCursorSnapPreview();
     this.loadData().then(() => this.loadPlanDraft());
   }
 
@@ -263,6 +269,7 @@ class GameMap {
       "display-station-type": "stationTypeBadges",
       "display-cursor-snap": "cursorSnap",
       "display-cursor-snap-label": "cursorSnapLabel",
+      "display-cursor-snap-line": "cursorSnapLine",
     };
     for (const [id, key] of Object.entries(displayControls)) {
       const el = document.getElementById(id);
@@ -282,6 +289,14 @@ class GameMap {
     if (cursorSnapOpacity)
       cursorSnapOpacity.addEventListener("input", (e) =>
         this.setDisplaySetting("cursorSnapOpacity", (parseInt(e.target.value) || 42) / 100),
+      );
+    const cursorSnapLabelSize = document.getElementById("cursor-snap-label-size");
+    if (cursorSnapLabelSize)
+      cursorSnapLabelSize.addEventListener("input", (e) =>
+        this.setDisplaySetting(
+          "cursorSnapLabelSize",
+          (parseInt(e.target.value) || 125) / 100,
+        ),
       );
     const planEditName = document.getElementById("plan-edit-name");
     if (planEditName)
@@ -367,6 +382,32 @@ class GameMap {
     this.centerAlliance();
   }
 
+  async loadMapTasks(shouldRender = true) {
+    try {
+      const resp = await fetch("/map/api/tasks");
+      const data = await resp.json();
+      this.mapTasks = data.tasks || [];
+      this._updateAllianceOpsPanel();
+      if (shouldRender) this.render();
+    } catch (e) {
+      console.error("Map tasks error:", e);
+      this.mapTasks = [];
+    }
+  }
+
+  async loadNetworkIssues(shouldRender = true) {
+    try {
+      const resp = await fetch("/map/api/network-issues");
+      const data = await resp.json();
+      this.networkIssues = data.issues || [];
+      this._updateAllianceOpsPanel();
+      if (shouldRender) this.render();
+    } catch (e) {
+      console.error("Network issues error:", e);
+      this.networkIssues = [];
+    }
+  }
+
   async loadData(options = {}) {
     try {
       const preserveViewport = options.preserveViewport ?? this.hasLoadedData;
@@ -376,6 +417,7 @@ class GameMap {
       this.meta = data.meta || {};
       this._refreshExistingNetworkStatus();
       if (this.meta.area) this.area = this.meta.area;
+      await Promise.all([this.loadMapTasks(false), this.loadNetworkIssues(false)]);
       this._updateStatus();
 
       const params = new URLSearchParams(window.location.search);
@@ -413,6 +455,7 @@ class GameMap {
     if (this.filters["filter-coverage"]) this.drawPlanCoverage();
     this.drawSystems();
     this.drawObjects();
+    this.drawMapTasks();
     this.drawUncoveredPoints();
     this.drawPlanSuggestions();
     this.drawEvaluatedPoint();
@@ -911,6 +954,11 @@ class GameMap {
       const val = document.getElementById("cursor-snap-opacity-val");
       if (val) val.textContent = Math.round(value * 100) + "%";
     }
+    if (key === "cursorSnapLabelSize") {
+      const val = document.getElementById("cursor-snap-label-size-val");
+      if (val) val.textContent = Math.round(value * 100) + "%";
+    }
+    this.drawCursorSnapPreview();
     this.render();
   }
 
@@ -1392,7 +1440,11 @@ class GameMap {
     const radius = Math.max(4, Math.min(9, systemPx * 0.24 * sizeFactor));
 
     c.save();
-    if (pointer && Math.hypot(pointer.x - sp.x, pointer.y - sp.y) > 3) {
+    if (
+      this.displaySettings.cursorSnapLine &&
+      pointer &&
+      Math.hypot(pointer.x - sp.x, pointer.y - sp.y) > 3
+    ) {
       c.strokeStyle = active
         ? "rgba(46,204,113," + Math.min(0.36, opacity * 0.55) + ")"
         : "rgba(116,185,255," + Math.min(0.28, opacity * 0.45) + ")";
@@ -1445,8 +1497,15 @@ class GameMap {
 
     if (this.displaySettings.cursorSnapLabel && systemPx >= 7) {
       const coord = "[" + point.sx + ":" + point.sy + ":" + (point.z || 0) + "]";
+      const labelFactor = Math.max(
+        0.9,
+        Math.min(1.7, this.displaySettings.cursorSnapLabelSize || 1.25),
+      );
+      const labelFontSize = Math.round(8 * labelFactor);
       this._drawBadge(sp.x + radius + 6, sp.y - 9, coord, {
-        fontSize: 8,
+        fontSize: labelFontSize,
+        padX: 6,
+        padY: 4,
         fill: "rgba(5,9,14," + Math.min(0.78, opacity + 0.28) + ")",
         stroke: active
           ? "rgba(46,204,113," + Math.min(0.48, opacity + 0.08) + ")"
@@ -1454,6 +1513,133 @@ class GameMap {
         color: "rgba(255,255,255,0.86)",
         bold: true,
       });
+    }
+    c.restore();
+  }
+
+  drawCursorSnapPreview() {
+    const canvas = document.getElementById("cursor-snap-preview");
+    if (!canvas) return;
+    const c = canvas.getContext("2d");
+    const w = canvas.width;
+    const h = canvas.height;
+    c.clearRect(0, 0, w, h);
+    c.fillStyle = "#0a0e14";
+    c.fillRect(0, 0, w, h);
+
+    c.strokeStyle = "rgba(255,255,255,0.06)";
+    c.lineWidth = 1;
+    for (let x = 16; x < w; x += 24) {
+      c.beginPath();
+      c.moveTo(x, 0);
+      c.lineTo(x, h);
+      c.stroke();
+    }
+    for (let y = 10; y < h; y += 18) {
+      c.beginPath();
+      c.moveTo(0, y);
+      c.lineTo(w, y);
+      c.stroke();
+    }
+
+    const enabled = this.displaySettings.cursorSnap;
+    const labelEnabled = this.displaySettings.cursorSnapLabel;
+    const lineEnabled = this.displaySettings.cursorSnapLine;
+    const opacity = Math.max(
+      0.12,
+      Math.min(0.85, this.displaySettings.cursorSnapOpacity || 0.42),
+    );
+    const sizeFactor = Math.max(
+      0.35,
+      Math.min(1, this.displaySettings.cursorSnapSize || 0.62),
+    );
+    const labelFactor = Math.max(
+      0.9,
+      Math.min(1.7, this.displaySettings.cursorSnapLabelSize || 1.25),
+    );
+    const cx = 54;
+    const cy = 27;
+    const pointer = { x: 26, y: 42 };
+    const radius = enabled ? Math.max(4, Math.min(10, 7 * sizeFactor)) : 4;
+    const color = enabled ? "#74b9ff" : "#6c757d";
+
+    c.save();
+    if (enabled && lineEnabled) {
+      c.strokeStyle = "rgba(116,185,255," + Math.min(0.28, opacity * 0.45) + ")";
+      c.lineWidth = 1;
+      c.setLineDash([2, 5]);
+      c.beginPath();
+      c.moveTo(pointer.x, pointer.y);
+      c.lineTo(cx, cy);
+      c.stroke();
+      c.setLineDash([]);
+    }
+
+    c.shadowColor = color;
+    c.shadowBlur = enabled ? 4 * sizeFactor : 0;
+    c.strokeStyle = enabled
+      ? "rgba(116,185,255," + Math.min(0.72, opacity + 0.12) + ")"
+      : "rgba(255,255,255,0.18)";
+    c.fillStyle = enabled
+      ? "rgba(116,185,255," + Math.min(0.14, opacity * 0.28) + ")"
+      : "rgba(255,255,255,0.04)";
+    c.lineWidth = 1.25;
+    c.beginPath();
+    c.arc(cx, cy, radius, 0, Math.PI * 2);
+    c.fill();
+    c.stroke();
+
+    c.shadowBlur = 0;
+    c.strokeStyle = enabled
+      ? "rgba(255,255,255," + Math.min(0.66, opacity + 0.12) + ")"
+      : "rgba(255,255,255,0.22)";
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(cx - radius - 3, cy);
+    c.lineTo(cx - 2, cy);
+    c.moveTo(cx + 2, cy);
+    c.lineTo(cx + radius + 3, cy);
+    c.moveTo(cx, cy - radius - 3);
+    c.lineTo(cx, cy - 2);
+    c.moveTo(cx, cy + 2);
+    c.lineTo(cx, cy + radius + 3);
+    c.stroke();
+
+    c.fillStyle = enabled ? "#74b9ff" : "#6c757d";
+    const dot = Math.max(2.5, radius * 0.42);
+    c.beginPath();
+    c.moveTo(cx, cy - dot);
+    c.lineTo(cx + dot, cy);
+    c.lineTo(cx, cy + dot);
+    c.lineTo(cx - dot, cy);
+    c.closePath();
+    c.fill();
+
+    if (enabled && labelEnabled) {
+      const text = "[2488:2519:0]";
+      const fontSize = Math.round(8 * labelFactor);
+      const padX = 6;
+      const padY = 4;
+      c.font = "bold " + fontSize + "px sans-serif";
+      const bw = Math.ceil(c.measureText(text).width + padX * 2);
+      const bh = fontSize + padY * 2;
+      const bx = cx + radius + 8;
+      const by = cy - bh / 2;
+      c.fillStyle = "rgba(5,9,14," + Math.min(0.78, opacity + 0.28) + ")";
+      c.strokeStyle = "rgba(116,185,255," + Math.min(0.42, opacity + 0.06) + ")";
+      c.lineWidth = 1;
+      c.beginPath();
+      if (typeof c.roundRect === "function") {
+        c.roundRect(bx, by, bw, bh, 4);
+      } else {
+        this._roundedRectPath(c, bx, by, bw, bh, 4);
+      }
+      c.fill();
+      c.stroke();
+      c.fillStyle = "rgba(255,255,255,0.9)";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.fillText(text, bx + bw / 2, by + bh / 2 + 0.5);
     }
     c.restore();
   }
@@ -2405,6 +2591,55 @@ class GameMap {
     }
   }
 
+  drawMapTasks() {
+    if (!this.filters["filter-tasks"] || !this.mapTasks.length) return;
+    const c = this.ctx;
+    for (const task of this.mapTasks) {
+      if (typeof task.wx !== "number" || typeof task.wy !== "number") continue;
+      const sp = this.worldToScreen(task.wx, task.wy);
+      if (
+        sp.x < -24 ||
+        sp.x > this.canvas.width + 24 ||
+        sp.y < -24 ||
+        sp.y > this.canvas.height + 24
+      )
+        continue;
+      const color =
+        task.priority === "Критический"
+          ? "#ff5252"
+          : task.priority === "Высокий"
+            ? "#f39c12"
+            : task.status === "Ожидает"
+              ? "#a29bfe"
+              : "#00cec9";
+      c.save();
+      c.fillStyle = "rgba(10,14,20,0.85)";
+      c.strokeStyle = color;
+      c.lineWidth = 2;
+      c.beginPath();
+      if (typeof c.roundRect === "function") {
+        c.roundRect(sp.x - 9, sp.y - 9, 18, 18, 4);
+      } else {
+        c.rect(sp.x - 9, sp.y - 9, 18, 18);
+      }
+      c.fill();
+      c.stroke();
+      c.fillStyle = color;
+      c.font = "12px sans-serif";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.fillText("!", sp.x, sp.y + 0.5);
+      if (this.scale > 0.025) {
+        c.textBaseline = "alphabetic";
+        c.font = "10px sans-serif";
+        c.fillStyle = "rgba(255,255,255,0.82)";
+        const label = task.title || "Задача";
+        c.fillText(label.length > 18 ? label.slice(0, 17) + "…" : label, sp.x, sp.y + 24);
+      }
+      c.restore();
+    }
+  }
+
   _drawStar(cx, cy, spikes, outer, inner) {
     const c = this.ctx;
     let rot = -Math.PI / 2,
@@ -2486,6 +2721,22 @@ class GameMap {
       if (d < bestDist) {
         bestDist = d;
         best = obj;
+      }
+    }
+    return best;
+  }
+
+  findTaskAt(sx, sy) {
+    if (!this.filters["filter-tasks"]) return null;
+    let best = null,
+      bestDist = 16;
+    for (const task of this.mapTasks) {
+      if (typeof task.wx !== "number" || typeof task.wy !== "number") continue;
+      const sp = this.worldToScreen(task.wx, task.wy);
+      const d = Math.hypot(sp.x - sx, sp.y - sy);
+      if (d < bestDist) {
+        bestDist = d;
+        best = task;
       }
     }
     return best;
@@ -4093,6 +4344,7 @@ class GameMap {
     const obj = this.findObjectAt(mx, my);
     const planObj = this.findPlanStationAt(mx, my);
     const suggestionObj = this.findSuggestionAt(mx, my);
+    const taskObj = this.findTaskAt(mx, my);
     const point = this._systemPointFromScreen(mx, my);
     this._contextPos = {
       sx: point.sx,
@@ -4102,6 +4354,7 @@ class GameMap {
       obj: obj,
       planObj: planObj,
       suggestionObj: suggestionObj,
+      taskObj: taskObj,
     };
 
     const menu = document.getElementById("map-context-menu");
@@ -4128,6 +4381,11 @@ class GameMap {
     if (suggestionObj) {
       html +=
         '<div class="ctx-item" data-action="add_suggestion"><i class="bi bi-plus-circle"></i> Добавить предложение в план</div>';
+      html += '<div class="ctx-divider"></div>';
+    }
+    if (taskObj) {
+      html +=
+        '<div class="ctx-item" data-action="open_task"><i class="bi bi-list-check"></i> Открыть задачу</div>';
       html += '<div class="ctx-divider"></div>';
     }
     if (this.pendingMoveObj) {
@@ -4172,6 +4430,12 @@ class GameMap {
       '<div class="ctx-item" data-action="plan_station"><i class="bi bi-broadcast-pin"></i> Плановая алстанция</div>';
     html +=
       '<div class="ctx-item" data-action="evaluate_point"><i class="bi bi-graph-up-arrow"></i> Проверить точку [' +
+      point.sx +
+      ":" +
+      point.sy +
+      ":0]</div>";
+    html +=
+      '<div class="ctx-item" data-action="create_task"><i class="bi bi-list-check"></i> Создать задачу [' +
       point.sx +
       ":" +
       point.sy +
@@ -4295,6 +4559,63 @@ class GameMap {
     if (this._contextPos && this._contextPos.obj && this._contextPos.obj.url) {
       window.location.href = this._contextPos.obj.url;
     }
+  }
+
+  _ctx_open_task() {
+    this.hideContextMenu();
+    if (this._contextPos && this._contextPos.taskObj && this._contextPos.taskObj.url) {
+      window.location.href = this._contextPos.taskObj.url;
+    }
+  }
+
+  async _ctx_create_task() {
+    this.hideContextMenu();
+    if (!this._contextPos) return;
+    const obj = this._contextPos.obj;
+    const isAlstation = obj && this._isAlstation(obj);
+    const defaultType = isAlstation
+      ? "check_network"
+      : this._contextPos.planObj
+        ? "build_alstation"
+        : "scout_point";
+    const title = prompt(
+      "Название задачи",
+      isAlstation
+        ? "Проверить сеть алстанции"
+        : defaultType === "build_alstation"
+          ? "Построить алстанцию"
+          : "Разведать точку",
+    );
+    if (!title) return;
+    const payload = {
+      title: title,
+      task_type: defaultType,
+      direction: defaultType === "scout_point" ? "Разведка" : "Карта",
+      priority: isAlstation && obj.network_connected === false ? "Высокий" : "Средний",
+      status: "Новая",
+      x: this._contextPos.sx,
+      y: this._contextPos.sy,
+      z: 0,
+      map_object_id: obj && obj.id ? obj.id : null,
+      map_object_type: isAlstation ? "alstation" : obj ? "object" : "point",
+      description: obj
+        ? "Создано с карты для объекта: " + (obj.name || obj.nick || obj.id)
+        : "Создано с карты по координатам.",
+    };
+    const resp = await fetch("/map/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      alert(data.error || "Не удалось создать задачу");
+      return;
+    }
+    const data = await resp.json();
+    if (data.task) this.mapTasks.push(data.task);
+    this._updateAllianceOpsPanel();
+    this.render();
   }
 
   _ctx_plan_station() {
@@ -4612,6 +4933,78 @@ class GameMap {
     } catch (e) {
       alert("Ошибка сети: " + e.message);
     }
+  }
+
+  _updateAllianceOpsPanel() {
+    const el = document.getElementById("map-ops-panel");
+    if (!el) return;
+    const issueHtml = this.networkIssues.length
+      ? this.networkIssues
+          .slice(0, 4)
+          .map(
+            (issue) =>
+              '<div class="map-ops-row" data-kind="issue" data-x="' +
+              issue.x +
+              '" data-y="' +
+              issue.y +
+              '">' +
+              '<span class="text-warning"><i class="bi bi-exclamation-triangle"></i></span> ' +
+              this._escapeHtml(issue.name || "Алстанция") +
+              '<br><small class="text-muted">' +
+              this._escapeHtml(issue.title || "Проблема сети") +
+              (typeof issue.network_touch_delta === "number"
+                ? ", откл. " + issue.network_touch_delta
+                : "") +
+              "</small></div>",
+          )
+          .join("")
+      : '<div class="text-muted small">Проблем сети не найдено</div>';
+    const taskHtml = this.mapTasks.length
+      ? this.mapTasks
+          .slice(0, 5)
+          .map(
+            (task) =>
+              '<div class="map-ops-row" data-kind="task" data-id="' +
+              task.id +
+              '" data-x="' +
+              task.x +
+              '" data-y="' +
+              task.y +
+              '">' +
+              '<span class="text-info"><i class="bi bi-list-check"></i></span> ' +
+              this._escapeHtml(task.title || "Задача") +
+              '<br><small class="text-muted">' +
+              this._escapeHtml(task.status || "") +
+              " · " +
+              this._escapeHtml(task.priority || "") +
+              "</small></div>",
+          )
+          .join("")
+      : '<div class="text-muted small">Задач с координатами нет</div>';
+    el.innerHTML =
+      '<div class="d-flex justify-content-between small mb-1"><strong>Штаб карты</strong><span>' +
+      this.networkIssues.length +
+      " / " +
+      this.mapTasks.length +
+      "</span></div>" +
+      '<div class="small text-muted mb-1">Проблемы сети</div>' +
+      issueHtml +
+      '<div class="small text-muted mt-2 mb-1">Задачи</div>' +
+      taskHtml;
+
+    el.querySelectorAll(".map-ops-row").forEach((row) => {
+      row.addEventListener("click", () => {
+        const x = parseInt(row.dataset.x);
+        const y = parseInt(row.dataset.y);
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+          this.focusCoordinate({ x, y, z: 0 });
+        }
+        if (row.dataset.kind === "task" && row.dataset.id) {
+          const task = this.mapTasks.find((item) => String(item.id) === row.dataset.id);
+          this.highlightedTask = task || null;
+        }
+      });
+    });
   }
 
   _updateStationsList() {

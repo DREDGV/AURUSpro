@@ -43,6 +43,54 @@
     </div>
 </div>
 
+<div class="panel mb-3">
+    <div class="panel-header">
+        <h6><i class="bi bi-command me-2"></i>Требует внимания</h6>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('tasks.create') }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i> Задача</a>
+            <a href="{{ url_for('center.create_request') }}" class="btn btn-sm btn-outline-secondary">Заявка</a>
+            <a href="{{ url_for('center.create_decision') }}" class="btn btn-sm btn-outline-secondary">Решение</a>
+            <a href="{{ url_for('center.create_log') }}" class="btn btn-sm btn-outline-secondary">Журнал</a>
+        </div>
+    </div>
+    <div class="panel-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="small text-muted fw-bold text-uppercase mb-2">Открытые задачи</div>
+                {% for t in open_tasks[:5] %}
+                <div class="mb-2">
+                    <a href="{{ url_for('tasks.detail', task_id=t['id']) }}" class="link-accent fw-semibold">{{ t['title'] }}</a>
+                    <br><small class="text-muted">{{ t['priority'] or '-' }} · {{ t['status'] or '-' }} · {{ t['assignee_nick'] or 'не назначен' }}</small>
+                </div>
+                {% endfor %}
+                {% if not open_tasks %}<div class="text-muted small">Нет открытых задач</div>{% endif %}
+            </div>
+            <div class="col-md-4">
+                <div class="small text-muted fw-bold text-uppercase mb-2">Карта и координаты</div>
+                {% for t in map_tasks[:5] %}
+                <div class="mb-2">
+                    <a href="{{ url_for('tasks.detail', task_id=t['id']) }}" class="link-accent fw-semibold">{{ t['title'] }}</a>
+                    {% if t['coordinates'] %}
+                    <br><a href="{{ url_for('map.index') }}?focus={{ t['coordinates'] }}" class="small link-accent"><code>{{ t['coordinates'] }}</code></a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% if not map_tasks %}<div class="text-muted small">Нет задач с координатами</div>{% endif %}
+            </div>
+            <div class="col-md-4">
+                <div class="small text-muted fw-bold text-uppercase mb-2">Слабые места сети</div>
+                {% for issue in network_issues[:5] %}
+                <div class="mb-2">
+                    <a href="{{ url_for('map.index') }}?focus=[{{ issue.x }}:{{ issue.y }}:{{ issue.z or 0 }}]" class="link-accent fw-semibold">{{ issue.name }}</a>
+                    <br><small class="text-muted">{{ issue.title }}{% if issue.network_touch_delta is not none %}, откл. {{ issue.network_touch_delta }}{% endif %}</small>
+                </div>
+                {% endfor %}
+                {% if not network_issues %}<div class="text-muted small">Проблем сети не найдено</div>{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="dashboard-grid">
     <div class="panel">
         <div class="panel-header">

@@ -136,9 +136,80 @@ def init_db():
         status TEXT DEFAULT 'Новая',
         deadline TEXT,
         comment TEXT,
+        coordinates TEXT,
+        map_object_id INTEGER,
+        map_object_type TEXT,
+        task_type TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         closed_at TIMESTAMP,
         FOREIGN KEY (assignee_id) REFERENCES players(id) ON DELETE SET NULL
+    )''')
+
+    c.execute('''CREATE TABLE task_comments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id INTEGER NOT NULL,
+        author TEXT,
+        comment_text TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    )''')
+
+    c.execute('''CREATE TABLE requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        player_id INTEGER,
+        request_type TEXT,
+        title TEXT NOT NULL,
+        description TEXT,
+        priority TEXT,
+        status TEXT,
+        assignee TEXT,
+        resolution TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        resolved_at TIMESTAMP,
+        FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE SET NULL
+    )''')
+
+    c.execute('''CREATE TABLE request_comments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        request_id INTEGER NOT NULL,
+        author TEXT,
+        comment_text TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE CASCADE
+    )''')
+
+    c.execute('''CREATE TABLE decisions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        proposer TEXT,
+        description TEXT,
+        status TEXT,
+        priority TEXT,
+        deadline TEXT,
+        result TEXT,
+        created_by TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    c.execute('''CREATE TABLE alliance_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type TEXT,
+        title TEXT NOT NULL,
+        description TEXT,
+        related_player TEXT,
+        author TEXT,
+        event_date TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+    c.execute('''CREATE TABLE alliance_topics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT,
+        status TEXT DEFAULT 'Открыто',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
     c.execute('''CREATE TABLE questionnaires (

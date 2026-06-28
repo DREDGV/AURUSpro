@@ -190,6 +190,24 @@
                 <div class="d-grid gap-2">
                     <a href="{{ url_for('players.edit', player_id=player['id']) }}" class="btn btn-outline-primary">Редактировать</a>
                 </div>
+                <div class="panel mt-3">
+                    <div class="panel-header">
+                        <h6>Задачи игрока</h6>
+                    </div>
+                    <div class="panel-body">
+                        {% for task in player_tasks %}
+                        <div class="mb-2">
+                            <a class="link-accent fw-semibold" href="{{ url_for('tasks.detail', task_id=task['id']) }}">{{ task['title'] }}</a>
+                            <br><small class="text-muted">{{ task['status'] or '-' }} · {{ task['priority'] or '-' }}</small>
+                            {% if task['coordinates'] %}<br><a class="small link-accent" href="{{ url_for('map.index') }}?focus={{ task['coordinates'] }}"><code>{{ task['coordinates'] }}</code></a>{% endif %}
+                        </div>
+                        {% endfor %}
+                        {% if not player_tasks %}
+                        <div class="text-muted small">Назначенных задач нет</div>
+                        {% endif %}
+                        <a class="btn btn-sm btn-outline-secondary mt-2" href="{{ url_for('tasks.create') }}?assignee_id={{ player['id'] }}">Создать задачу</a>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

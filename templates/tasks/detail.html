@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ task['title'] }} — AURUS{% endblock %}
+{% block title %}{{ task['title'] }} - AURUS{% endblock %}
 {% block page_title %}{{ task['title'] }}{% endblock %}
 {% block content %}
 <div class="row">
@@ -8,8 +8,8 @@
             <div class="panel-header">
                 <h6>Детали задачи</h6>
                 <div class="d-flex gap-2">
-                    <a href="{{ url_for('tasks.edit', task_id=task['id']) }}" class="btn btn-sm btn-outline-primary">✎ Редактировать</a>
-                    <a href="{{ url_for('tasks.list') }}" class="btn btn-sm btn-outline-secondary">← Назад</a>
+                    <a href="{{ url_for('tasks.edit', task_id=task['id']) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i> Редактировать</a>
+                    <a href="{{ url_for('tasks.list') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад</a>
                 </div>
             </div>
             <div class="panel-body">
@@ -17,7 +17,7 @@
                     <span class="badge {% if task['priority'] == 'Критический' %}bg-danger{% elif task['priority'] == 'Высокий' %}bg-warning text-dark{% elif task['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">
                         {{ task['priority'] }}
                     </span>
-                    <span class="badge {% if task['status'] == 'Новая' %}bg-primary{% elif task['status'] == 'В работе' %}bg-warning text-dark{% elif task['status'] == 'Выполнена' %}bg-success{% else %}bg-secondary{% endif %}">
+                    <span class="badge {% if task['status'] == 'Новая' %}bg-primary{% elif task['status'] == 'В работе' %}bg-warning text-dark{% elif task['status'] == 'Выполнена' %}bg-success{% elif task['status'] == 'Ожидает' %}bg-secondary{% else %}bg-dark{% endif %}">
                         {{ task['status'] }}
                     </span>
                 </div>
@@ -27,9 +27,19 @@
                 </div>
                 {% endif %}
                 <div class="row text-muted" style="font-size:13px;">
-                    <div class="col-md-4"><strong>Ответственный:</strong> {{ task['assignee_nick'] or '—' }}</div>
-                    <div class="col-md-4"><strong>Направление:</strong> {{ task['direction'] or '—' }}</div>
-                    <div class="col-md-4"><strong>Срок:</strong> {{ task['deadline'] or '—' }}</div>
+                    <div class="col-md-4"><strong>Ответственный:</strong> {{ task['assignee_nick'] or '-' }}</div>
+                    <div class="col-md-4"><strong>Направление:</strong> {{ task['direction'] or '-' }}</div>
+                    <div class="col-md-4"><strong>Срок:</strong> {{ task['deadline'] or '-' }}</div>
+                </div>
+                <div class="row text-muted mt-2" style="font-size:13px;">
+                    <div class="col-md-4"><strong>Тип:</strong> {{ task['task_type'] or '-' }}</div>
+                    <div class="col-md-4">
+                        <strong>Координаты:</strong>
+                        {% if task['coordinates'] %}
+                        <a class="link-accent" href="{{ url_for('map.index') }}?focus={{ task['coordinates'] }}"><code>{{ task['coordinates'] }}</code></a>
+                        {% else %}-{% endif %}
+                    </div>
+                    <div class="col-md-4"><strong>Объект:</strong> {{ task['map_object_type'] or '-' }}{% if task['map_object_id'] %} #{{ task['map_object_id'] }}{% endif %}</div>
                 </div>
                 {% if task['participants'] %}
                 <div class="mt-2 text-muted" style="font-size:13px;"><strong>Участники:</strong> {{ task['participants'] }}</div>
@@ -76,17 +86,15 @@
             </div>
             <div class="panel-body">
                 <div class="d-grid gap-2">
-                    {% if task['status'] != 'Новая' %}
-                    <button class="btn btn-outline-primary btn-sm" onclick="changeStatus({{ task['id'] }}, 'Новая')">↩ Новая</button>
+                    {% for status in ['Новая', 'В работе', 'Ожидает', 'Выполнена', 'Отменена'] %}
+                    {% if task['status'] != status %}
+                    <button class="btn btn-outline-secondary btn-sm" onclick="changeStatus({{ task['id'] }}, '{{ status }}')">{{ status }}</button>
                     {% endif %}
-                    {% if task['status'] != 'В работе' %}
-                    <button class="btn btn-outline-warning btn-sm" onclick="changeStatus({{ task['id'] }}, 'В работе')">▶ В работу</button>
-                    {% endif %}
-                    {% if task['status'] != 'Выполнена' %}
-                    <button class="btn btn-outline-success btn-sm" onclick="changeStatus({{ task['id'] }}, 'Выполнена')">✓ Выполнена</button>
-                    {% endif %}
-                    {% if task['status'] != 'Отменена' %}
-                    <button class="btn btn-dark btn-sm" onclick="changeStatus({{ task['id'] }}, 'Отменена')">✕ Отменена</button>
+                    {% endfor %}
+                    {% if task['coordinates'] %}
+                    <a class="btn btn-outline-info btn-sm" href="{{ url_for('map.index') }}?focus={{ task['coordinates'] }}">
+                        <i class="bi bi-map"></i> Открыть на карте
+                    </a>
                     {% endif %}
                 </div>
             </div>

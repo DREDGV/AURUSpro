@@ -50,6 +50,10 @@
                     <input class="form-check-input" type="checkbox" id="filter-vrata" checked>
                     <label class="form-check-label" for="filter-vrata"><span style="color:#9b59b6;">★</span> Врата</label>
                 </div>
+                <div class="form-check form-check-sm">
+                    <input class="form-check-input" type="checkbox" id="filter-tasks" checked>
+                    <label class="form-check-label" for="filter-tasks"><span style="color:#00cec9;">▣</span> Задачи</label>
+                </div>
             </div>
 
             <div class="mb-3">
@@ -122,15 +126,28 @@
                             <input class="form-check-input" type="checkbox" id="display-cursor-snap-label" checked>
                             <label class="form-check-label" for="display-cursor-snap-label">Подпись маркера курсора</label>
                         </div>
+                        <div class="form-check form-check-sm">
+                            <input class="form-check-input" type="checkbox" id="display-cursor-snap-line">
+                            <label class="form-check-label" for="display-cursor-snap-line">Линия магнитной привязки</label>
+                        </div>
                         <label class="form-label mb-0 small text-muted">Размер маркера: <span id="cursor-snap-size-val">62%</span></label>
                         <input type="range" id="cursor-snap-size" class="form-range" min="35" max="100" value="62">
+                        <label class="form-label mb-0 small text-muted">Размер подписи: <span id="cursor-snap-label-size-val">125%</span></label>
+                        <input type="range" id="cursor-snap-label-size" class="form-range" min="90" max="170" value="125">
                         <label class="form-label mb-0 small text-muted">Яркость маркера: <span id="cursor-snap-opacity-val">42%</span></label>
                         <input type="range" id="cursor-snap-opacity" class="form-range" min="15" max="85" value="42">
+                        <canvas id="cursor-snap-preview" width="170" height="54"
+                                style="width:100%;height:54px;display:block;margin-top:6px;border:1px solid rgba(255,255,255,0.08);border-radius:6px;background:#0a0e14;"></canvas>
                     </div>
                 </div>
             </div>
 
             <div id="map-status" class="small text-muted mb-3">Loading map...</div>
+
+            <div id="map-ops-panel" class="mb-3 p-2 rounded"
+                 style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);font-size:12px;">
+                <div class="text-muted small">Загрузка штаба карты...</div>
+            </div>
 
             <div class="d-grid gap-2 mb-3">
                 <button id="btn-home" class="btn btn-sm btn-outline-primary">
@@ -415,8 +432,10 @@
 .ctx-item:hover { background: rgba(108,92,231,0.25); color: #fff; }
 .ctx-danger:hover { background: rgba(231,76,60,0.3); color: #e74c3c; }
 .ctx-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 3px 8px; }
+.map-ops-row { padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.08); cursor: pointer; }
+.map-ops-row:hover { color: #fff; background: rgba(108,92,231,0.14); }
 </style>
-<script src="{{ url_for('static', filename='js/map.js') }}?v=20260628-4"></script>
+<script src="{{ url_for('static', filename='js/map.js') }}?v=20260628-7"></script>
 <script>
 document.getElementById('st-level').addEventListener('input', function() {
     const v = Math.max(1, Math.min(20, parseInt(this.value) || 1));

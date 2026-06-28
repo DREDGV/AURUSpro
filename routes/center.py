@@ -1,5 +1,7 @@
 from flask import Blueprint, render_template, session, redirect, url_for, request, flash, jsonify
 from utils.db import get_db
+from utils.schema import ensure_alliance_schema
+from routes.map import _existing_alstations, _network_issue_payload
 import json
 
 center = Blueprint('center', __name__)
@@ -10,6 +12,7 @@ def index():
     if 'user_id' not in session:
         return redirect(url_for('auth.login'))
     db = get_db()
+    ensure_alliance_schema(db)
 
     pending_requests = db.execute(
         "SELECT r.*, p.nick as player_nick FROM requests r "
@@ -51,6 +54,28 @@ def index():
         "WHERE needs_help_with IS NOT NULL AND needs_help_with != ''"
     ).fetchall()
 
+    open_tasks = db.execute(
+        """SELECT t.*, p.nick as assignee_nick
+           FROM tasks t LEFT JOIN players p ON t.assignee_id = p.id
+           WHERE t.status IS NULL OR t.status NOT IN ('Выполнена', 'Отменена')
+           ORDER BY CASE t.priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END,
+                    t.created_at DESC
+           LIMIT 8"""
+    ).fetchall()
+    map_tasks = db.execute(
+        """SELECT t.*, p.nick as assignee_nick
+           FROM tasks t LEFT JOIN players p ON t.assignee_id = p.id
+           WHERE t.coordinates IS NOT NULL AND t.coordinates != ''
+             AND (t.status IS NULL OR t.status NOT IN ('Выполнена', 'Отменена'))
+           ORDER BY t.created_at DESC
+           LIMIT 6"""
+    ).fetchall()
+    network_issues = [
+        _network_issue_payload(station)
+        for station in _existing_alstations(db)
+        if station.get('network_status') in ('signal_only', 'isolated')
+    ]
+
     db.close()
     return render_template('center/index.html',
         pending_requests=pending_requests,
@@ -62,7 +87,10 @@ def index():
         active_players=active_players,
         total_requests=total_requests,
         resolved_requests=resolved_requests,
-        help_needed=help_needed)
+        help_needed=help_needed,
+        open_tasks=open_tasks,
+        map_tasks=map_tasks,
+        network_issues=network_issues)
 
 
 @center.route('/center/decisions')

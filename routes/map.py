@@ -2,6 +2,7 @@ import re
 
 from flask import Blueprint, render_template, session, redirect, url_for, jsonify, request
 from utils.db import get_db
+from utils.schema import ensure_alliance_schema
 from utils.map_engine import (
     ALLIANCE_CENTER_X,
     ALLIANCE_CENTER_Y,
@@ -21,6 +22,8 @@ from utils.map_engine import (
     is_map_ready,
     normalize_map_object,
     parse_coordinates,
+    world_x,
+    world_y,
 )
 
 map_bp = Blueprint('map', __name__)
@@ -261,9 +264,82 @@ def _ensure_plan_table(db):
     )''')
 
 
+def _task_type_label(value):
+    labels = {
+        'build_alstation': 'Построить алстанцию',
+        'move_alstation': 'Перенести алстанцию',
+        'check_network': 'Проверить сеть',
+        'scout_point': 'Разведать точку',
+        'support_player': 'Помочь игроку',
+        'other': 'Другое',
+    }
+    return labels.get(value or 'other', value or 'Другое')
+
+
+def _task_payload(row):
+    coords = parse_coordinates(row['coordinates'] or '')
+    payload = {
+        'id': row['id'],
+        'title': row['title'],
+        'direction': row['direction'],
+        'description': row['description'],
+        'assignee_id': row['assignee_id'],
+        'assignee_nick': row['assignee_nick'],
+        'priority': row['priority'],
+        'status': row['status'],
+        'deadline': row['deadline'],
+        'coordinates': row['coordinates'],
+        'task_type': row['task_type'] or 'other',
+        'task_type_label': _task_type_label(row['task_type']),
+        'map_object_id': row['map_object_id'],
+        'map_object_type': row['map_object_type'],
+        'url': url_for('tasks.detail', task_id=row['id']),
+    }
+    if coords:
+        payload.update({
+            'x': coords['x'],
+            'y': coords['y'],
+            'z': coords['z'],
+            'wx': world_x(coords['x']),
+            'wy': world_y(coords['y']),
+        })
+    return payload
+
+
+def _network_issue_payload(station):
+    issue_type = 'isolated'
+    title = 'Алстанция вне общей сети'
+    severity = 'high'
+    if station.get('network_status') == 'signal_only':
+        issue_type = 'signal_only'
+        title = 'Сигнал есть, но общей сети нет'
+        severity = 'medium'
+    elif station.get('network_status') == 'isolated':
+        issue_type = 'isolated'
+        title = 'Нет связи с сетью'
+        severity = 'high'
+    return {
+        'id': station.get('id'),
+        'name': station.get('name') or 'Алстанция',
+        'title': title,
+        'issue_type': issue_type,
+        'severity': severity,
+        'x': station.get('x'),
+        'y': station.get('y'),
+        'z': station.get('z', 0),
+        'wx': station.get('wx'),
+        'wy': station.get('wy'),
+        'level': station.get('level'),
+        'radius': station.get('radius'),
+        'network_status': station.get('network_status'),
+        'network_parent': station.get('network_parent'),
+        'network_touch_delta': station.get('network_touch_delta'),
+    }
+
+
 def _existing_alstations(db):
     rows = db.execute(
-        'SELECT o.name, o.object_type, o.coordinates, o.level '
+        'SELECT o.id, o.name, o.object_type, o.coordinates, o.level '
         'FROM game_objects o WHERE o.coordinates != ""'
     ).fetchall()
     existing = []
@@ -274,6 +350,7 @@ def _existing_alstations(db):
         if coords and is_map_ready(coords):
             level = row['level'] or 1
             existing.append(normalize_map_object({
+                'id': row['id'],
                 'name': row['name'],
                 'level': level,
                 'radius': alstation_radius(level),
@@ -775,6 +852,127 @@ def api_save_planned_stations():
     db.commit()
     db.close()
     return jsonify({'ok': True, 'count': len(stations)})
+
+
+@map_bp.route('/map/api/tasks', methods=['GET'])
+def api_map_tasks():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    db = get_db()
+    ensure_alliance_schema(db)
+    rows = db.execute(
+        '''SELECT t.*, p.nick as assignee_nick
+           FROM tasks t LEFT JOIN players p ON t.assignee_id = p.id
+           WHERE t.coordinates IS NOT NULL AND t.coordinates != ''
+           ORDER BY
+             CASE t.priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END,
+             CASE t.status WHEN 'Новая' THEN 0 WHEN 'В работе' THEN 1 WHEN 'Ожидает' THEN 2 WHEN 'Выполнена' THEN 4 ELSE 3 END,
+             t.created_at DESC'''
+    ).fetchall()
+    tasks = []
+    for row in rows:
+        item = _task_payload(row)
+        if item.get('x') is not None and is_map_ready({'x': item['x'], 'y': item['y'], 'z': item.get('z', 0)}):
+            tasks.append(item)
+    db.close()
+    return jsonify({'tasks': tasks})
+
+
+@map_bp.route('/map/api/tasks', methods=['POST'])
+def api_create_map_task():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    x = data.get('x')
+    y = data.get('y')
+    z = data.get('z', 0) or 0
+    try:
+        x = int(x)
+        y = int(y)
+        z = int(z)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Valid x, y, z are required'}), 400
+    if not (ALLIANCE_MIN_X <= x <= ALLIANCE_MAX_X and ALLIANCE_MIN_Y <= y <= ALLIANCE_MAX_Y):
+        return jsonify({'error': 'Coordinates outside alliance area'}), 400
+
+    title = (data.get('title') or '').strip()
+    task_type = (data.get('task_type') or 'other').strip()
+    if not title:
+        title = _task_type_label(task_type)
+    coords = '[%d:%d:%d]' % (x, y, z)
+    priority = (data.get('priority') or 'Средний').strip()
+    status = (data.get('status') or 'Новая').strip()
+    direction = (data.get('direction') or 'Карта').strip()
+
+    db = get_db()
+    ensure_alliance_schema(db)
+    db.execute(
+        '''INSERT INTO tasks (title, direction, description, assignee_id, participants, priority, status,
+           deadline, comment, coordinates, map_object_id, map_object_type, task_type, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''',
+        (
+            title,
+            direction,
+            (data.get('description') or '').strip() or None,
+            data.get('assignee_id') or None,
+            data.get('participants'),
+            priority,
+            status,
+            data.get('deadline'),
+            data.get('comment'),
+            coords,
+            data.get('map_object_id') or None,
+            data.get('map_object_type'),
+            task_type,
+        ),
+    )
+    task_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+    db.execute(
+        '''INSERT INTO alliance_log (event_type, title, description, author, event_date)
+           VALUES (?, ?, ?, ?, date('now'))''',
+        ('Задача', 'Создана задача с карты', '%s %s' % (title, coords), session.get('username')),
+    )
+    db.commit()
+    row = db.execute(
+        '''SELECT t.*, p.nick as assignee_nick
+           FROM tasks t LEFT JOIN players p ON t.assignee_id = p.id WHERE t.id = ?''',
+        (task_id,),
+    ).fetchone()
+    payload = _task_payload(row)
+    db.close()
+    return jsonify({'ok': True, 'task': payload})
+
+
+@map_bp.route('/map/api/network-issues')
+def api_network_issues():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    db = get_db()
+    ensure_alliance_schema(db)
+    existing = _existing_alstations(db)
+    issues = [
+        _network_issue_payload(station)
+        for station in existing
+        if station.get('network_status') in ('signal_only', 'isolated')
+    ]
+    open_tasks = db.execute(
+        '''SELECT t.*, p.nick as assignee_nick
+           FROM tasks t LEFT JOIN players p ON t.assignee_id = p.id
+           WHERE t.task_type = 'check_network'
+             AND (t.status IS NULL OR t.status NOT IN ('Выполнена', 'Отменена'))
+           ORDER BY t.created_at DESC'''
+    ).fetchall()
+    tasks = [_task_payload(row) for row in open_tasks]
+    db.close()
+    return jsonify({
+        'issues': issues,
+        'tasks': tasks,
+        'summary': {
+            'total': len(issues),
+            'signal_only': sum(1 for item in issues if item['issue_type'] == 'signal_only'),
+            'isolated': sum(1 for item in issues if item['issue_type'] == 'isolated'),
+        }
+    })
 
 
 @map_bp.route('/map/api/optimize')

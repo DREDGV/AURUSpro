@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, session, redirect, url_for, request, flash
 from utils.db import get_db
+from utils.schema import ensure_alliance_schema
 
 players = Blueprint('players', __name__)
 
@@ -11,6 +12,7 @@ def list():
     query = request.args.get('q', '')
     status = request.args.get('status', '')
     db = get_db()
+    ensure_alliance_schema(db)
     if query:
         all_players = db.execute(
             'SELECT p.*, (SELECT GROUP_CONCAT(DISTINCT a.race) FROM accounts a WHERE a.player_id = p.id) as races '
@@ -44,9 +46,13 @@ def card(player_id):
     messages = db.execute('SELECT * FROM messages WHERE player_id = ? ORDER BY created_at DESC', (player_id,)).fetchall()
     player_fleet = db.execute('SELECT * FROM fleet WHERE player_id = ?', (player_id,)).fetchall()
     player_objects = db.execute('SELECT * FROM game_objects WHERE player_id = ?', (player_id,)).fetchall()
+    player_tasks = db.execute(
+        'SELECT * FROM tasks WHERE assignee_id = ? ORDER BY created_at DESC LIMIT 12',
+        (player_id,)
+    ).fetchall()
     db.close()
     return render_template('players/card.html', player=player, accounts=accounts, notes=notes, messages=messages,
-        player_fleet=player_fleet, player_objects=player_objects)
+        player_fleet=player_fleet, player_objects=player_objects, player_tasks=player_tasks)
 
 
 @players.route('/players/create', methods=['GET', 'POST'])
