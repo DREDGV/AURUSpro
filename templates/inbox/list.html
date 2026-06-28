@@ -26,7 +26,7 @@
     <div class="col-lg-5">
         <div class="panel">
             <div class="panel-header">
-                <h6><i class="bi bi-inbox me-2"></i>Новое входящее</h6>
+                <h6><i class="bi bi-inbox me-2"></i>Быстрый сброс</h6>
             </div>
             <div class="panel-body">
                 <form method="POST" action="{{ url_for('inbox.create_item') }}">
@@ -49,10 +49,23 @@
                             </datalist>
                         </div>
                     </div>
-                    <textarea name="raw_text" class="form-control mb-2" rows="8"
-                              placeholder="Вставьте сообщение игрока, заметку, разведданные или проблему..." required></textarea>
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-7">
+                            <select name="split_mode" class="form-select form-select-sm">
+                                <option value="smart" selected>Авто-разделение</option>
+                                <option value="blank">По пустой строке</option>
+                                <option value="line">Каждая строка</option>
+                                <option value="single">Одним входящим</option>
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <span class="badge bg-light text-dark border w-100 py-2">Очередь разбора</span>
+                        </div>
+                    </div>
+                    <textarea name="raw_text" class="form-control mb-2" rows="10"
+                              placeholder="Вставьте сообщение, проблему или пачку сообщений. Формат вроде 'ник: текст' поможет привязать игрока." required></textarea>
                     <button class="btn btn-sm" style="background:var(--accent);color:#fff;">
-                        <i class="bi bi-magic"></i> Разобрать и сохранить
+                        <i class="bi bi-magic"></i> Разобрать очередь
                     </button>
                 </form>
             </div>

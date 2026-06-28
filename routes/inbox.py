@@ -1,4 +1,5 @@
 import json
+import re
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
 
@@ -10,6 +11,7 @@ inbox = Blueprint('inbox', __name__)
 
 INBOX_STATUSES = ['Новое', 'Разобрано', 'Требует подтверждения', 'В работе', 'Обработано', 'Отклонено']
 SOURCE_TYPES = ['message', 'note', 'intel', 'problem', 'manual']
+CHAT_LINE_RE = re.compile(r'^(\[[^\]]{1,16}\]\s*)?[\wА-Яа-яЁё ._-]{2,32}\s*[:>–-]')
 
 
 def _players(db):
@@ -53,6 +55,36 @@ def _update_item_analysis(db, item_id, raw_text):
         ),
     )
     return analysis
+
+
+def _split_bulk_messages(raw_text, mode='smart'):
+    text = (raw_text or '').replace('\r\n', '\n').replace('\r', '\n').strip()
+    if not text:
+        return []
+    if mode == 'single':
+        return [text]
+
+    if mode in ('blank', 'smart'):
+        chunks = [chunk.strip() for chunk in re.split(r'\n\s*\n+', text) if chunk.strip()]
+        if mode == 'blank' or len(chunks) > 1:
+            return chunks or [text]
+
+    if mode in ('line', 'smart'):
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        chat_like_lines = sum(1 for line in lines if CHAT_LINE_RE.match(line))
+        should_split_lines = len(lines) > 1 and chat_like_lines >= max(2, len(lines) // 2)
+        if mode == 'line' or should_split_lines:
+            return lines or [text]
+
+    return [text]
+
+
+def _first_detected_player_id(analysis):
+    for player in analysis.get('players') or []:
+        player_id = player.get('id')
+        if player_id:
+            return player_id
+    return None
 
 
 @inbox.route('/inbox')
@@ -101,21 +133,36 @@ def create_item():
     db = get_db()
     ensure_alliance_schema(db)
     source_player_id = request.form.get('source_player_id') or None
-    db.execute(
-        '''INSERT INTO intake_items (source_type, source_player_id, raw_text, status, author)
-           VALUES (?, ?, ?, 'Новое', ?)''',
-        (
-            request.form.get('source_type') or 'message',
-            source_player_id,
-            raw_text,
-            session.get('username'),
-        ),
-    )
-    item_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
-    _update_item_analysis(db, item_id, raw_text)
+    source_type = request.form.get('source_type') or 'message'
+    split_mode = request.form.get('split_mode') or 'smart'
+    chunks = _split_bulk_messages(raw_text, split_mode)
+    item_ids = []
+    for chunk in chunks:
+        db.execute(
+            '''INSERT INTO intake_items (source_type, source_player_id, raw_text, status, author)
+               VALUES (?, ?, ?, 'Новое', ?)''',
+            (
+                source_type,
+                source_player_id,
+                chunk,
+                session.get('username'),
+            ),
+        )
+        item_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        analysis = _update_item_analysis(db, item_id, chunk)
+        detected_player_id = None if source_player_id else _first_detected_player_id(analysis)
+        if detected_player_id:
+            db.execute(
+                'UPDATE intake_items SET source_player_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+                (detected_player_id, item_id),
+            )
+        item_ids.append(item_id)
     db.commit()
     db.close()
-    return redirect(url_for('inbox.detail', item_id=item_id))
+    if len(item_ids) == 1:
+        return redirect(url_for('inbox.detail', item_id=item_ids[0]))
+    flash(f'Добавлено входящих: {len(item_ids)}. Они ждут подтверждения.', 'success')
+    return redirect(url_for('inbox.list_items', status='Требует подтверждения'))
 
 
 @inbox.route('/inbox/<int:item_id>')
