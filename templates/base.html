@@ -159,7 +159,86 @@
                     });
                 });
             });
+            linkifyMapCoordinates(document.body);
+            var coordObserver = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.TEXT_NODE) {
+                            linkifyMapCoordinates(node);
+                        }
+                    });
+                });
+            });
+            coordObserver.observe(document.body, { childList: true, subtree: true });
+            document.addEventListener('click', function(e) {
+                var link = e.target.closest ? e.target.closest('.coord-link') : null;
+                if (!link || window.location.pathname !== '/map' || !window.map || typeof window.map.openCoordinate !== 'function') {
+                    return;
+                }
+                var source = link.textContent || link.getAttribute('href') || '';
+                try {
+                    var href = new URL(link.href, window.location.origin);
+                    source = href.searchParams.get('focus') || source;
+                } catch (err) {}
+                var m = String(source).match(/\[?(\d{4,5})\s*:\s*(\d{4,5})\s*:\s*(\d{1,2})\]?/);
+                if (!m) return;
+                e.preventDefault();
+                window.map.openCoordinate({
+                    x: parseInt(m[1], 10),
+                    y: parseInt(m[2], 10),
+                    z: parseInt(m[3], 10) || 0
+                });
+            });
         });
+
+        function linkifyMapCoordinates(root) {
+            if (!root) return;
+            var coordRe = /(\[?)(\b\d{4,5})\s*:\s*(\d{4,5})\s*:\s*(\d{1,2})(\]?)/g;
+            var skipTags = { A: true, SCRIPT: true, STYLE: true, TEXTAREA: true, INPUT: true, SELECT: true, BUTTON: true };
+            var walkerRoot = root.nodeType === Node.TEXT_NODE ? root.parentNode : root;
+            if (!walkerRoot || skipTags[walkerRoot.nodeName]) return;
+            var walker = document.createTreeWalker(
+                walkerRoot,
+                NodeFilter.SHOW_TEXT,
+                {
+                    acceptNode: function(node) {
+                        coordRe.lastIndex = 0;
+                        if (!node.nodeValue || !coordRe.test(node.nodeValue)) return NodeFilter.FILTER_REJECT;
+                        coordRe.lastIndex = 0;
+                        var parent = node.parentNode;
+                        while (parent) {
+                            if (skipTags[parent.nodeName] || (parent.classList && parent.classList.contains('coord-link'))) {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                            parent = parent.parentNode;
+                        }
+                        return NodeFilter.FILTER_ACCEPT;
+                    }
+                }
+            );
+            var nodes = [];
+            while (walker.nextNode()) nodes.push(walker.currentNode);
+            nodes.forEach(function(textNode) {
+                var text = textNode.nodeValue;
+                coordRe.lastIndex = 0;
+                var frag = document.createDocumentFragment();
+                var last = 0;
+                var match;
+                while ((match = coordRe.exec(text)) !== null) {
+                    var start = match.index;
+                    if (start > last) frag.appendChild(document.createTextNode(text.slice(last, start)));
+                    var label = '[' + match[2] + ':' + match[3] + ':' + match[4] + ']';
+                    var link = document.createElement('a');
+                    link.className = 'coord-link';
+                    link.href = '/map?focus=' + encodeURIComponent(label);
+                    link.textContent = match[1] || match[5] ? label : match[2] + ':' + match[3] + ':' + match[4];
+                    frag.appendChild(link);
+                    last = coordRe.lastIndex;
+                }
+                if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+                textNode.parentNode.replaceChild(frag, textNode);
+            });
+        }
     </script>
     {% block scripts %}{% endblock %}
 </body>

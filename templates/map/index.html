@@ -62,6 +62,72 @@
                     <input class="form-check-input" type="checkbox" id="filter-coverage" checked>
                     <label class="form-check-label" for="filter-coverage">Зоны покрытия</label>
                 </div>
+                <div class="mt-2 p-2 rounded" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="small text-muted">Существующие</span>
+                        <input type="color" id="coverage-existing-color" value="#3498db" title="Цвет покрытия существующих алстанций">
+                    </div>
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <span class="small text-muted">Плановые</span>
+                        <input type="color" id="coverage-plan-color" value="#2ecc71" title="Цвет покрытия плановых алстанций">
+                    </div>
+                    <div class="mt-2 pt-2" style="border-top:1px solid rgba(255,255,255,0.08);">
+                        <div class="small text-muted mb-1">Легенда сети</div>
+                        <div class="d-flex align-items-center gap-2 small mb-1">
+                            <span style="width:14px;height:8px;border-radius:2px;background:#3498db;display:inline-block;"></span>
+                            <span>существующая общая сеть</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 small mb-1">
+                            <span style="width:14px;height:8px;border-radius:2px;background:#2ecc71;display:inline-block;"></span>
+                            <span>плановая общая сеть</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 small">
+                            <span style="width:14px;height:8px;border-radius:2px;background:#ff7675;display:inline-block;"></span>
+                            <span>сигнал есть, но не общая сеть</span>
+                        </div>
+                    </div>
+                    <label class="form-label mb-0 small text-muted">Прозрачность: <span id="coverage-opacity-val">18%</span></label>
+                    <input type="range" id="coverage-opacity" class="form-range" min="5" max="45" value="18">
+                    <div class="form-check form-check-sm">
+                        <input class="form-check-input" type="checkbox" id="coverage-unified" checked>
+                        <label class="form-check-label" for="coverage-unified">Единый сигнал сети</label>
+                    </div>
+                    <div class="form-check form-check-sm">
+                        <input class="form-check-input" type="checkbox" id="coverage-rings" checked>
+                        <label class="form-check-label" for="coverage-rings">Границы станций</label>
+                    </div>
+                    <div class="mt-2 pt-2" style="border-top:1px solid rgba(255,255,255,0.08);">
+                        <div class="small text-muted mb-1">Детали объектов</div>
+                        <div class="form-check form-check-sm">
+                            <input class="form-check-input" type="checkbox" id="display-coord-labels" checked>
+                            <label class="form-check-label" for="display-coord-labels">Подписи координат</label>
+                        </div>
+                        <div class="form-check form-check-sm">
+                            <input class="form-check-input" type="checkbox" id="display-level-badges" checked>
+                            <label class="form-check-label" for="display-level-badges">Бейджи уровней</label>
+                        </div>
+                        <div class="form-check form-check-sm">
+                            <input class="form-check-input" type="checkbox" id="display-signal-radius" checked>
+                            <label class="form-check-label" for="display-signal-radius">Радиус сигнала алстанций</label>
+                        </div>
+                        <div class="form-check form-check-sm">
+                            <input class="form-check-input" type="checkbox" id="display-station-type" checked>
+                            <label class="form-check-label" for="display-station-type">Тип алстанции</label>
+                        </div>
+                        <div class="form-check form-check-sm">
+                            <input class="form-check-input" type="checkbox" id="display-cursor-snap" checked>
+                            <label class="form-check-label" for="display-cursor-snap">Маркер координаты курсора</label>
+                        </div>
+                        <div class="form-check form-check-sm">
+                            <input class="form-check-input" type="checkbox" id="display-cursor-snap-label" checked>
+                            <label class="form-check-label" for="display-cursor-snap-label">Подпись маркера курсора</label>
+                        </div>
+                        <label class="form-label mb-0 small text-muted">Размер маркера: <span id="cursor-snap-size-val">62%</span></label>
+                        <input type="range" id="cursor-snap-size" class="form-range" min="35" max="100" value="62">
+                        <label class="form-label mb-0 small text-muted">Яркость маркера: <span id="cursor-snap-opacity-val">42%</span></label>
+                        <input type="range" id="cursor-snap-opacity" class="form-range" min="15" max="85" value="42">
+                    </div>
+                </div>
             </div>
 
             <div id="map-status" class="small text-muted mb-3">Loading map...</div>
@@ -73,6 +139,10 @@
                 <div class="btn-group btn-group-sm">
                     <button id="btn-zoom-in" class="btn btn-outline-secondary"><i class="bi bi-plus-lg"></i></button>
                     <button id="btn-zoom-out" class="btn btn-outline-secondary"><i class="bi bi-dash-lg"></i></button>
+                </div>
+                <div class="btn-group btn-group-sm">
+                    <button id="btn-undo" class="btn btn-outline-secondary" title="Отменить последнее действие (Ctrl+Z)" disabled><i class="bi bi-arrow-counterclockwise"></i></button>
+                    <button id="btn-cancel-command" class="btn btn-outline-secondary" title="Отменить текущий режим"><i class="bi bi-x-lg"></i></button>
                 </div>
                 <button id="btn-export" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-download"></i> Экспорт PNG
@@ -105,12 +175,94 @@
                 </div>
                 <div id="plan-summary" class="small text-muted my-2">План: 0</div>
                 <div class="btn-group btn-group-sm w-100 mb-2">
+                    <button id="btn-plan-confirm-cursor" class="btn btn-outline-success" title="Подтвердить текущую точку"><i class="bi bi-check2"></i></button>
+                    <button id="btn-plan-check-cursor" class="btn btn-outline-info" title="Проверить текущую точку"><i class="bi bi-graph-up-arrow"></i></button>
+                    <button id="btn-plan-cancel-mode" class="btn btn-outline-secondary" title="Отменить текущий режим"><i class="bi bi-x-lg"></i></button>
+                </div>
+                <div class="btn-group btn-group-sm w-100 mb-2">
                     <button id="btn-plan-suggest" class="btn btn-outline-warning" title="Предложить места"><i class="bi bi-magic"></i></button>
+                    <button id="btn-plan-chain-to-point" class="btn btn-outline-info" title="Построить цепь до точки"><i class="bi bi-signpost"></i></button>
                     <button id="btn-plan-copy" class="btn btn-outline-secondary" title="Скопировать план"><i class="bi bi-clipboard"></i></button>
                     <button id="btn-plan-clear" class="btn btn-outline-secondary" title="Очистить план"><i class="bi bi-trash"></i></button>
                     <button id="btn-plan-save" class="btn btn-outline-success" title="Сохранить план как объекты"><i class="bi bi-check2"></i></button>
                 </div>
+                <div id="chain-summary" class="small text-muted mb-2">Цепь до точки: не выбрана</div>
+                <div class="p-2 rounded mb-2" style="background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.25);">
+                    <small class="text-warning fw-bold text-uppercase" style="font-size:10px;">Оптимизатор</small>
+                    <div class="row g-1 mt-1">
+                        <div class="col-8">
+                            <input id="optimizer-levels" class="form-control form-control-sm" value="6,8,10,12" title="Уровни через запятую">
+                        </div>
+                        <div class="col-4">
+                            <input id="optimizer-count" type="number" min="1" max="12" class="form-control form-control-sm" value="5" title="Сколько станций подобрать">
+                        </div>
+                    </div>
+                    <div class="mt-2 p-2 rounded" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
+                        <div class="small text-muted mb-1">Станция в наличии</div>
+                        <div class="row g-1">
+                            <div class="col-5">
+                                <input id="owned-station-level" type="number" min="1" max="20" class="form-control form-control-sm" value="8" title="Уровень имеющейся алстанции">
+                            </div>
+                            <div class="col-3">
+                                <input id="owned-station-count" type="number" min="1" max="12" class="form-control form-control-sm" value="1" title="Сколько таких станций есть">
+                            </div>
+                            <div class="col-4 d-grid">
+                                <button id="btn-owned-station-optimize" class="btn btn-sm btn-outline-info" title="Найти лучшие места для имеющихся станций"><i class="bi bi-bullseye"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <select id="optimizer-scenario" class="form-select form-select-sm mt-1" title="Сценарий планирования">
+                        <option value="max_coverage">Максимум покрытия</option>
+                        <option value="close_gaps">Закрыть дыры</option>
+                        <option value="min_stations">Минимум станций</option>
+                        <option value="compare_levels">Сравнить уровни</option>
+                    </select>
+                    <div class="mt-2 small">
+                        <div class="text-muted mb-1">Цели расчета</div>
+                        <label class="me-2"><input class="optimizer-target" type="checkbox" value="players" checked> игроки</label>
+                        <label class="me-2"><input class="optimizer-target" type="checkbox" value="accounts" checked> аккаунты</label>
+                        <label class="me-2"><input class="optimizer-target" type="checkbox" value="ops" checked> ОПС</label>
+                        <label class="me-2"><input class="optimizer-target" type="checkbox" value="gate" checked> врата</label>
+                        <label class="me-2"><input class="optimizer-target" type="checkbox" value="dunya" checked> дуни</label>
+                        <label class="me-2"><input class="optimizer-target" type="checkbox" value="moon" checked> луны</label>
+                    </div>
+                    <div class="btn-group btn-group-sm w-100 mt-1">
+                        <button id="btn-plan-optimize" class="btn btn-outline-warning" title="Рассчитать лучшие координаты"><i class="bi bi-cpu"></i></button>
+                        <button id="btn-plan-add-network" class="btn btn-outline-success" title="Добавить лучший набор в план" disabled><i class="bi bi-plus-square"></i></button>
+                    </div>
+                    <div id="optimizer-summary" class="small text-muted mt-1">Расчет не выполнен</div>
+                    <div id="optimizer-list" class="mt-1" style="max-height:220px;overflow:auto;">
+                        <div class="text-muted small">Запросите расчет для нужных уровней</div>
+                    </div>
+                </div>
+                <div id="point-eval-panel" class="p-2 rounded mb-2" style="display:none;background:rgba(52,152,219,0.08);border:1px solid rgba(52,152,219,0.28);">
+                    <div class="d-flex align-items-center gap-2">
+                        <small class="text-info fw-bold text-uppercase flex-grow-1" style="font-size:10px;">Проверка точки</small>
+                        <button id="btn-eval-add-best" class="btn btn-sm btn-outline-success py-0 px-1" title="Добавить лучший уровень в план"><i class="bi bi-plus-lg"></i></button>
+                    </div>
+                    <div id="point-eval-summary" class="small text-muted mt-1"></div>
+                    <div id="point-eval-list" class="mt-1" style="max-height:180px;overflow:auto;"></div>
+                </div>
                 <div id="plan-list" style="max-height:180px;overflow:auto;"></div>
+                <div id="plan-edit-panel" class="mt-2 p-2 rounded" style="display:none;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);">
+                    <small class="text-muted fw-bold text-uppercase" style="font-size:10px;">Быстрое редактирование</small>
+                    <input type="text" id="plan-edit-name" class="form-control form-control-sm mt-1" placeholder="Название плановой алстанции">
+                    <div class="mt-2">
+                        <label class="form-label mb-0">Уровень: <strong id="plan-edit-level-val">10</strong></label>
+                        <input type="range" id="plan-edit-level" class="form-range" min="1" max="20" value="10">
+                    </div>
+                    <select id="plan-edit-status" class="form-select form-select-sm mb-2">
+                        <option value="План">План</option>
+                        <option value="Строится">Строится</option>
+                        <option value="Кандидат">Кандидат</option>
+                        <option value="Согласовано">Согласовано</option>
+                    </select>
+                    <textarea id="plan-edit-comment" class="form-control form-control-sm" rows="2" placeholder="Комментарий"></textarea>
+                    <div class="form-check form-check-sm mt-2">
+                        <input class="form-check-input" type="checkbox" id="plan-edit-locked">
+                        <label class="form-check-label" for="plan-edit-locked">Закрепить от случайного перемещения</label>
+                    </div>
+                </div>
                 <hr class="my-2">
                 <small class="text-muted fw-bold text-uppercase" style="font-size:10px;">Предложения</small>
                 <div id="suggestions-list" class="mt-1" style="max-height:180px;overflow:auto;">
@@ -153,6 +305,7 @@
             <canvas id="map-canvas" style="width:100%;height:100%;background:#0a0e14;display:block;"></canvas>
             <div id="map-tooltip" style="display:none;position:absolute;pointer-events:none;background:rgba(26,29,35,0.95);color:#fff;padding:8px 12px;border-radius:6px;font-size:12px;border:1px solid rgba(108,92,231,0.4);z-index:10;max-width:250px;"></div>
             <div id="map-coord-hud" style="display:none;position:absolute;left:12px;bottom:12px;background:rgba(10,14,20,0.88);color:#fff;padding:7px 10px;border-radius:6px;font-size:12px;border:1px solid rgba(255,255,255,0.18);z-index:11;"></div>
+            <div id="map-action-hud" style="display:none;position:absolute;left:12px;top:12px;background:rgba(10,14,20,0.9);color:#fff;padding:8px 10px;border-radius:6px;font-size:12px;line-height:1.6;border:1px solid rgba(116,185,255,0.35);z-index:11;max-width:560px;box-shadow:0 4px 18px rgba(0,0,0,0.35);"></div>
             <div id="minimap-container" style="position:absolute;right:12px;bottom:12px;width:180px;height:180px;border:2px solid rgba(108,92,231,0.5);border-radius:8px;background:#0a0e14;z-index:10;cursor:crosshair;box-shadow:0 2px 12px rgba(0,0,0,0.5);">
                 <canvas id="minimap-canvas" width="180" height="180" style="width:100%;height:100%;display:block;"></canvas>
             </div>
@@ -194,7 +347,7 @@
                     <label class="form-label mb-0" style="font-size:12px;">Уровень: <strong id="st-level-val">10</strong></label>
                     <input type="range" id="st-level" class="form-range" min="1" max="20" value="10">
                     <div class="d-flex justify-content-between" style="font-size:10px;color:#888;">
-                        <span>1</span><span>Радиус: <span id="st-radius-info">9000</span> ед.</span><span>20</span>
+                        <span>1</span><span>Радиус: <span id="st-radius-info">9000</span> укм</span><span>20</span>
                     </div>
                 </div>
                 <div class="mb-2">
@@ -204,6 +357,26 @@
                         <option value="Строится">Строится</option>
                         <option value="Неактивен">Неактивен</option>
                     </select>
+                </div>
+                <div class="mb-2" id="st-mobility-group">
+                    <label class="form-label mb-0" style="font-size:12px;">Тип алстанции</label>
+                    <select id="st-mobility" class="form-select form-select-sm">
+                        <option value="stationary">Стационарная: Луна / терраны</option>
+                        <option value="mobile">Перемещаемая: ОПС / космо</option>
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label mb-0" style="font-size:12px;">Владелец (игрок)</label>
+                    <input type="hidden" id="st-player-id">
+                    <input type="search" id="st-player-search" class="form-control form-control-sm"
+                           list="st-player-options" placeholder="Начните вводить ник игрока">
+                    <datalist id="st-player-options">
+                        <option value="— Не привязан —" data-id=""></option>
+                        {% for p in players %}
+                        <option value="{{ p['nick'] }}" data-id="{{ p['id'] }}"></option>
+                        {% endfor %}
+                    </datalist>
+                    <div id="st-player-match" class="small text-muted mt-1">Не привязан</div>
                 </div>
                 <div class="mb-2">
                     <label class="form-label mb-0" style="font-size:12px;">Комментарий</label>
@@ -243,12 +416,12 @@
 .ctx-danger:hover { background: rgba(231,76,60,0.3); color: #e74c3c; }
 .ctx-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 3px 8px; }
 </style>
-<script src="{{ url_for('static', filename='js/map.js') }}?v=20260625-4"></script>
+<script src="{{ url_for('static', filename='js/map.js') }}?v=20260628-4"></script>
 <script>
 document.getElementById('st-level').addEventListener('input', function() {
     const v = Math.max(1, Math.min(20, parseInt(this.value) || 1));
     document.getElementById('st-level-val').textContent = v;
-    document.getElementById('st-radius-info').textContent = (v * 900) + ' ед.';
+    document.getElementById('st-radius-info').textContent = (v * 900);
 });
 document.getElementById('placement-level').addEventListener('input', function() {
     const v = parseInt(this.value);

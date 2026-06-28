@@ -10,9 +10,13 @@ from utils.map_engine import (
     ALLIANCE_MIN_X,
     ALLIANCE_MIN_Y,
     alstation_radius,
+    build_greedy_alstation_network,
     build_alstation_suggestions,
+    classify_alstation_network,
+    compare_alstation_levels,
     corridor_gap_analysis,
     coverage_analysis,
+    evaluate_alstation_at,
     in_alliance_area,
     is_map_ready,
     normalize_map_object,
@@ -24,7 +28,7 @@ map_bp = Blueprint('map', __name__)
 
 def _is_alstation_type(value):
     text = value or ''
-    return 'Алстанц' in text or 'РђР»СЃС‚Р°РЅС†' in text
+    return 'Алстанц' in text or 'Альстанц' in text
 
 
 _COORD_RE = re.compile(r'\[?(\d{1,4})\s*[:：]\s*(\d{1,4})\s*[:：]\s*(\d{1,2})\]?')
@@ -241,11 +245,157 @@ def _extract_intel_facts(db):
     return facts
 
 
+def _ensure_plan_table(db):
+    db.execute('''CREATE TABLE IF NOT EXISTS map_planned_alstations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        x INTEGER NOT NULL,
+        y INTEGER NOT NULL,
+        z INTEGER DEFAULT 0,
+        level INTEGER NOT NULL DEFAULT 10,
+        status TEXT DEFAULT 'План',
+        comment TEXT,
+        locked INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+
+
+def _existing_alstations(db):
+    rows = db.execute(
+        'SELECT o.name, o.object_type, o.coordinates, o.level '
+        'FROM game_objects o WHERE o.coordinates != ""'
+    ).fetchall()
+    existing = []
+    for row in rows:
+        if not _is_alstation_type(row['object_type']):
+            continue
+        coords = parse_coordinates(row['coordinates'])
+        if coords and is_map_ready(coords):
+            level = row['level'] or 1
+            existing.append(normalize_map_object({
+                'name': row['name'],
+                'level': level,
+                'radius': alstation_radius(level),
+            }, coords))
+    return classify_alstation_network(existing, fallback_level=10)
+
+
+def _target_weight(kind, source='object'):
+    if kind == 'ops':
+        return 6
+    if kind == 'gate':
+        return 5
+    if source == 'players':
+        return 4
+    if source == 'accounts':
+        return 3
+    if kind in ('dunya', 'moon'):
+        return 2
+    return 1
+
+
+def _target_points(db, target_filters=None):
+    filters = set(target_filters or ('players', 'accounts', 'ops', 'gate', 'dunya', 'moon'))
+    points = []
+
+    rows = db.execute(
+        'SELECT id, nick AS name, coordinates FROM players WHERE coordinates != ""'
+    ).fetchall()
+    if 'players' in filters:
+        for row in rows:
+            coords = parse_coordinates(row['coordinates'])
+            if coords and is_map_ready(coords):
+                points.append(normalize_map_object({
+                    'id': row['id'],
+                    'name': row['name'],
+                    'source': 'players',
+                    'target_type': 'player',
+                    'weight': _target_weight('player', 'players'),
+                }, coords))
+
+    if 'accounts' in filters:
+        rows = db.execute(
+            'SELECT id, nick AS name, coordinates FROM accounts WHERE coordinates != ""'
+        ).fetchall()
+        for row in rows:
+            coords = parse_coordinates(row['coordinates'])
+            if coords and is_map_ready(coords):
+                points.append(normalize_map_object({
+                    'id': row['id'],
+                    'name': row['name'],
+                    'source': 'accounts',
+                    'target_type': 'account',
+                    'weight': _target_weight('account', 'accounts'),
+                }, coords))
+
+    object_filters = filters.intersection({'ops', 'gate', 'dunya', 'moon', 'object'})
+    if object_filters:
+        rows = db.execute(
+            'SELECT id, object_type, name, coordinates FROM game_objects WHERE coordinates != ""'
+        ).fetchall()
+        for row in rows:
+            kind = _object_kind(row['object_type'])
+            if kind == 'alstation':
+                continue
+            if kind not in object_filters and not ('object' in object_filters and kind == 'object'):
+                continue
+            coords = parse_coordinates(row['coordinates'])
+            if coords and is_map_ready(coords):
+                points.append(normalize_map_object({
+                    'id': row['id'],
+                    'name': row['name'] or row['object_type'],
+                    'source': 'game_objects',
+                    'target_type': kind,
+                    'weight': _target_weight(kind, 'objects'),
+                }, coords))
+    return points
+
+
+def _clean_target_filters(value):
+    allowed = {'players', 'accounts', 'ops', 'gate', 'dunya', 'moon', 'object'}
+    filters = []
+    for chunk in str(value or '').replace(';', ',').split(','):
+        item = chunk.strip().lower()
+        if item in allowed and item not in filters:
+            filters.append(item)
+    return filters or ['players', 'accounts', 'ops', 'gate', 'dunya', 'moon']
+
+
+def _coverage_point_payload(point):
+    return {
+        'x': point['x'],
+        'y': point['y'],
+        'z': point.get('z', 0),
+        'wx': point['wx'],
+        'wy': point['wy'],
+        'name': point.get('name'),
+        'target_type': point.get('target_type'),
+        'weight': point.get('weight', 1),
+    }
+
+
+def _clean_levels(value, fallback=(8, 10, 12)):
+    levels = []
+    for chunk in str(value or '').replace(';', ',').split(','):
+        try:
+            level = int(chunk.strip())
+        except (TypeError, ValueError):
+            continue
+        if 1 <= level <= 20 and level not in levels:
+            levels.append(level)
+    return levels or list(fallback)
+
+
 @map_bp.route('/map')
 def index():
     if 'user_id' not in session:
         return redirect(url_for('auth.login'))
-    return render_template('map/index.html')
+    db = get_db()
+    players = db.execute('SELECT id, nick FROM players ORDER BY nick').fetchall()
+    db.close()
+    return render_template('map/index.html', players=players)
+
 
 
 @map_bp.route('/map/api/data')
@@ -306,7 +456,7 @@ def api_data():
             }, coords))
 
     gos = db.execute(
-        'SELECT g.id, g.object_type, g.name, g.player_id, g.coordinates, g.level '
+        'SELECT g.id, g.object_type, g.name, g.player_id, g.coordinates, g.level, g.status, g.comment '
         'FROM game_objects g WHERE g.coordinates IS NOT NULL AND g.coordinates != ""'
     ).fetchall()
     for g in gos:
@@ -327,12 +477,60 @@ def api_data():
                 'name': g['name'],
                 'race': None,
                 'level': g['level'] or 1,
+                'status': g['status'] or '',
+                'comment': g['comment'] or '',
                 'player_id': g['player_id'],
                 'url': None
             }, coords)
         if _is_alstation_type(g['object_type']):
             item['radius'] = alstation_radius(g['level'])
         objects.append(item)
+
+    alstations = [
+        item for item in objects
+        if item.get('type') == 'object' and _is_alstation_type(item.get('subtype'))
+    ]
+    classified_stations = classify_alstation_network(alstations, fallback_level=10)
+    by_key = {
+        (station.get('id'), station.get('x'), station.get('y'), station.get('z', 0)): station
+        for station in classified_stations
+        if not station.get('virtual')
+    }
+    for item in alstations:
+        classified = by_key.get((item.get('id'), item.get('x'), item.get('y'), item.get('z', 0)))
+        if classified:
+            item.update({
+                'network_connected': classified.get('network_connected', False),
+                'network_status': classified.get('network_status'),
+                'network_parent': classified.get('network_parent'),
+                'network_touch_delta': classified.get('network_touch_delta'),
+            })
+    for station in classified_stations:
+        if station.get('virtual'):
+            objects.append({
+                'id': 'main',
+                'type': 'object',
+                'subtype': 'Алстанция',
+                'nick': None,
+                'name': station.get('name') or 'Главная алстанция',
+                'race': None,
+                'level': station.get('level') or 10,
+                'player_id': None,
+                'url': None,
+                'x': station['x'],
+                'y': station['y'],
+                'z': station.get('z', 0),
+                'wx': station['wx'],
+                'wy': station['wy'],
+                'coord_format': 'colon',
+                'map_ready': True,
+                'radius': station.get('radius') or alstation_radius(10),
+                'network_connected': True,
+                'network_status': 'main',
+                'network_parent': None,
+                'network_touch_delta': 0,
+                'virtual': True,
+            })
 
     db.close()
 
@@ -377,38 +575,24 @@ def api_plan():
     corridor_x = request.args.get('corridor_x', type=int)
     corridor_y = request.args.get('corridor_y', type=int)
     corridor = (corridor_x, corridor_y) if corridor_x and corridor_y else None
+    target_filters = _clean_target_filters(request.args.get('targets'))
+    scenario = (request.args.get('scenario') or 'max_coverage').strip()
 
     db = get_db()
 
-    alstations = db.execute(
-        'SELECT o.name, o.object_type, o.coordinates, o.level '
-        'FROM game_objects o WHERE o.coordinates != ""'
-    ).fetchall()
-
-    existing = []
-    for a in alstations:
-        if not _is_alstation_type(a['object_type']):
-            continue
-        coords = parse_coordinates(a['coordinates'])
-        if coords and is_map_ready(coords):
-            level = a['level'] or 1
-            existing.append(normalize_map_object({
-                'level': level,
-                'radius': alstation_radius(level),
-            }, coords))
-
-    players = db.execute(
-        'SELECT coordinates FROM players WHERE coordinates != ""'
-    ).fetchall()
-    player_points = []
-    for p in players:
-        coords = parse_coordinates(p['coordinates'])
-        if coords and is_map_ready(coords):
-            player_points.append(normalize_map_object({}, coords))
+    existing = _existing_alstations(db)
+    player_points = _target_points(db, target_filters)
 
     analysis = coverage_analysis(player_points, existing)
-    suggestions = build_alstation_suggestions(player_points, existing, level=planned_level,
-                                               limit=30, corridor=corridor)
+    suggestions = build_greedy_alstation_network(
+        player_points,
+        existing,
+        levels=[planned_level],
+        count=30,
+    )
+    if corridor and not suggestions:
+        suggestions = build_alstation_suggestions(player_points, existing, level=planned_level,
+                                                   limit=30, corridor=corridor)
     corridor_info = corridor_gap_analysis(existing, level=planned_level, end_y=2560)
 
     db.close()
@@ -422,17 +606,22 @@ def api_plan():
             'uncovered': len(analysis['uncovered']),
             'coverage_pct': analysis['coverage_pct'],
             'uncovered_points': [
-                {'x': p['x'], 'y': p['y'], 'wx': p['wx'], 'wy': p['wy']}
+                _coverage_point_payload(p)
                 for p in analysis['uncovered']
             ],
+            'weight_total': analysis.get('total_weight', 0),
+            'weight_covered': analysis.get('covered_weight', 0),
+            'weight_pct': analysis.get('weight_pct', 0),
         },
         'meta': {
             'players_used': len(player_points),
+            'target_filters': target_filters,
             'stations_used': len(existing),
             'radius_per_level': alstation_radius(1),
             'planned_level': planned_level,
             'planned_radius': alstation_radius(planned_level),
             'corridor': corridor,
+            'scenario': scenario,
             'area': {
                 'min_x': ALLIANCE_MIN_X,
                 'max_x': ALLIANCE_MAX_X,
@@ -525,6 +714,169 @@ def api_intel():
     })
 
 
+@map_bp.route('/map/api/planned-stations', methods=['GET'])
+def api_get_planned_stations():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    db = get_db()
+    _ensure_plan_table(db)
+    rows = db.execute(
+        'SELECT id, name, x, y, z, level, status, comment, locked '
+        'FROM map_planned_alstations ORDER BY id'
+    ).fetchall()
+    stations = []
+    for row in rows:
+        coords = {'x': row['x'], 'y': row['y'], 'z': row['z'] or 0, 'format': 'colon', 'normalized': True}
+        item = normalize_map_object({
+            'id': row['id'],
+            'name': row['name'] or ('План %d' % row['id']),
+            'level': row['level'] or 10,
+            'radius': alstation_radius(row['level'] or 10),
+            'status': row['status'] or 'План',
+            'comment': row['comment'] or '',
+            'locked': bool(row['locked']),
+        }, coords)
+        stations.append(item)
+    db.close()
+    return jsonify({'stations': stations})
+
+
+@map_bp.route('/map/api/planned-stations', methods=['PUT'])
+def api_save_planned_stations():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    stations = data.get('stations') or []
+
+    db = get_db()
+    _ensure_plan_table(db)
+    db.execute('DELETE FROM map_planned_alstations')
+    for item in stations:
+        x = int(item.get('x') or item.get('sx') or 0)
+        y = int(item.get('y') or item.get('sy') or 0)
+        z = int(item.get('z') or 0)
+        if not (ALLIANCE_MIN_X <= x <= ALLIANCE_MAX_X and ALLIANCE_MIN_Y <= y <= ALLIANCE_MAX_Y):
+            continue
+        level = max(1, min(int(item.get('level') or 10), 20))
+        db.execute(
+            'INSERT INTO map_planned_alstations (name, x, y, z, level, status, comment, locked) '
+            'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            (
+                (item.get('name') or '').strip() or ('План %d' % level),
+                x,
+                y,
+                z,
+                level,
+                (item.get('status') or 'План').strip(),
+                (item.get('comment') or '').strip() or None,
+                1 if item.get('locked') else 0,
+            )
+        )
+    db.commit()
+    db.close()
+    return jsonify({'ok': True, 'count': len(stations)})
+
+
+@map_bp.route('/map/api/optimize')
+def api_optimize():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    levels = _clean_levels(request.args.get('levels'), fallback=(6, 8, 10, 12))
+    limit = max(1, min(request.args.get('limit', default=8, type=int) or 8, 30))
+    count = max(1, min(request.args.get('count', default=5, type=int) or 5, 12))
+    target_filters = _clean_target_filters(request.args.get('targets'))
+    scenario = (request.args.get('scenario') or 'max_coverage').strip()
+    if scenario == 'min_stations':
+        levels = sorted(levels, reverse=True)
+    if scenario == 'compare_levels':
+        count = 1
+
+    db = get_db()
+    existing = _existing_alstations(db)
+    targets = _target_points(db, target_filters)
+    analysis = coverage_analysis(targets, existing)
+    by_level = compare_alstation_levels(targets, existing, levels, limit=limit)
+    network = build_greedy_alstation_network(targets, existing, levels, count=count)
+    db.close()
+
+    return jsonify({
+        'levels': levels,
+        'by_level': by_level,
+        'network': network,
+        'coverage': {
+            'targets': analysis['total_players'],
+            'covered': len(analysis['covered']),
+            'uncovered': len(analysis['uncovered']),
+            'coverage_pct': analysis['coverage_pct'],
+            'uncovered_points': [
+                _coverage_point_payload(p)
+                for p in analysis['uncovered']
+            ],
+            'weight_total': analysis.get('total_weight', 0),
+            'weight_covered': analysis.get('covered_weight', 0),
+            'weight_pct': analysis.get('weight_pct', 0),
+        },
+        'meta': {
+            'stations_used': len(existing),
+            'target_filters': target_filters,
+            'scenario': scenario,
+            'radius_per_level': alstation_radius(1),
+        }
+    })
+
+
+@map_bp.route('/map/api/evaluate')
+def api_evaluate_point():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    x = request.args.get('x', type=int)
+    y = request.args.get('y', type=int)
+    z = request.args.get('z', default=0, type=int) or 0
+    if x is None or y is None:
+        return jsonify({'error': 'x and y are required'}), 400
+    if not (ALLIANCE_MIN_X <= x <= ALLIANCE_MAX_X and ALLIANCE_MIN_Y <= y <= ALLIANCE_MAX_Y):
+        return jsonify({'error': 'Coordinates outside alliance area'}), 400
+
+    levels = _clean_levels(request.args.get('levels'), fallback=range(1, 13))
+    target_filters = _clean_target_filters(request.args.get('targets'))
+    coords = {'x': x, 'y': y, 'z': z, 'format': 'colon', 'normalized': True}
+    point = normalize_map_object({'name': 'candidate'}, coords)
+
+    db = get_db()
+    existing = _existing_alstations(db)
+    targets = _target_points(db, target_filters)
+    evaluation = evaluate_alstation_at(point, targets, existing, levels)
+    analysis = coverage_analysis(targets, existing)
+    db.close()
+
+    return jsonify({
+        'point': {
+            'x': x,
+            'y': y,
+            'z': z,
+            'wx': point['wx'],
+            'wy': point['wy'],
+        },
+        'levels': evaluation,
+        'coverage': {
+            'targets': analysis['total_players'],
+            'covered': len(analysis['covered']),
+            'uncovered': len(analysis['uncovered']),
+            'coverage_pct': analysis['coverage_pct'],
+            'weight_total': analysis.get('total_weight', 0),
+            'weight_covered': analysis.get('covered_weight', 0),
+            'weight_pct': analysis.get('weight_pct', 0),
+        },
+        'meta': {
+            'target_filters': target_filters,
+            'stations_used': len(existing),
+            'radius_per_level': alstation_radius(1),
+        }
+    })
+
+
 @map_bp.route('/map/api/stations', methods=['POST'])
 def api_create_station():
     if 'user_id' not in session:
@@ -541,6 +893,11 @@ def api_create_station():
     status = (data.get('status') or 'Активен').strip()
     comment = (data.get('comment') or '').strip()
     subtype = (data.get('subtype') or 'Алстанция').strip()
+    player_id = data.get('player_id')
+    try:
+        player_id = int(player_id) if player_id else None
+    except (TypeError, ValueError):
+        player_id = None
 
     if x is None or y is None:
         return jsonify({'error': 'x и y обязательны'}), 400
@@ -551,9 +908,9 @@ def api_create_station():
     coord_str = '[%d:%d:%d]' % (x, y, z)
     db = get_db()
     cursor = db.execute(
-        'INSERT INTO game_objects (object_type, name, coordinates, level, status, controlled, comment) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?)',
-        (subtype, name, coord_str, level, status, 1, comment or None)
+        'INSERT INTO game_objects (player_id, object_type, name, coordinates, level, status, controlled, comment) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        (player_id, subtype, name, coord_str, level, status, 1, comment or None)
     )
     db.commit()
     new_id = cursor.lastrowid
@@ -565,6 +922,7 @@ def api_create_station():
         'level': level,
         'x': x, 'y': y, 'z': z,
         'coordinates': coord_str,
+        'player_id': player_id,
         'radius': alstation_radius(level),
     }), 201
 
@@ -606,6 +964,13 @@ def api_update_station(station_id):
     if 'comment' in data:
         updates.append('comment = ?')
         params.append(data['comment'] or None)
+    if 'player_id' in data:
+        try:
+            player_id = int(data.get('player_id')) if data.get('player_id') else None
+        except (TypeError, ValueError):
+            player_id = None
+        updates.append('player_id = ?')
+        params.append(player_id)
     if 'object_type' in data:
         updates.append('object_type = ?')
         params.append((data['object_type'] or 'Алстанция').strip())
@@ -616,7 +981,7 @@ def api_update_station(station_id):
         db.commit()
 
     updated = db.execute(
-        'SELECT id, name, coordinates, level, status, comment, object_type FROM game_objects WHERE id = ?', (station_id,)
+        'SELECT id, player_id, name, coordinates, level, status, comment, object_type FROM game_objects WHERE id = ?', (station_id,)
     ).fetchone()
     db.close()
 
@@ -633,6 +998,7 @@ def api_update_station(station_id):
         'radius': alstation_radius(level),
         'status': updated['status'],
         'comment': updated['comment'] or '',
+        'player_id': updated['player_id'],
         'object_type': updated['object_type'],
     })
 
@@ -660,7 +1026,7 @@ def api_get_station(station_id):
         return jsonify({'error': 'Unauthorized'}), 401
     db = get_db()
     row = db.execute(
-        'SELECT id, name, coordinates, level, object_type FROM game_objects WHERE id = ?',
+        'SELECT id, player_id, name, coordinates, level, object_type FROM game_objects WHERE id = ?',
         (station_id,)
     ).fetchone()
     if not row:
@@ -691,5 +1057,6 @@ def api_get_station(station_id):
         'radius': alstation_radius(level),
         'status': status,
         'comment': comment,
+        'player_id': row['player_id'],
         'object_type': row['object_type'],
     })

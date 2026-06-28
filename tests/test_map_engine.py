@@ -2,7 +2,10 @@ import unittest
 
 from utils.map_engine import (
     alstation_radius,
+    build_greedy_alstation_network,
     build_alstation_suggestions,
+    compare_alstation_levels,
+    evaluate_alstation_at,
     is_map_ready,
     normalize_map_object,
     parse_coordinates,
@@ -52,6 +55,41 @@ class MapEngineTest(unittest.TestCase):
         self.assertTrue(all(item["radius"] == 900 for item in suggestions))
         self.assertTrue(all(2000 <= item["x"] <= 3000 for item in suggestions))
         self.assertTrue(all("wx" in item and "wy" in item for item in suggestions))
+
+    def test_compare_levels_returns_each_requested_level(self):
+        players = [
+            {"x": 2500, "y": 2500, "map_ready": True},
+            {"x": 2510, "y": 2510, "map_ready": True},
+        ]
+        result = compare_alstation_levels(players, [], levels=[6, 10], limit=3)
+
+        self.assertEqual([item["level"] for item in result], [6, 10])
+        self.assertTrue(all(item["radius"] == alstation_radius(item["level"]) for item in result))
+
+    def test_greedy_network_respects_requested_levels(self):
+        players = [
+            {"x": 2500, "y": 2500, "map_ready": True},
+            {"x": 2520, "y": 2520, "map_ready": True},
+            {"x": 2550, "y": 2550, "map_ready": True},
+        ]
+        network = build_greedy_alstation_network(players, [], levels=[6, 10], count=2)
+
+        self.assertTrue(network)
+        self.assertTrue(all(item["level"] in [6, 10] for item in network))
+        self.assertTrue(all(2000 <= item["x"] <= 3000 for item in network))
+
+    def test_evaluate_alstation_at_uses_weighted_targets(self):
+        targets = [
+            {"x": 2500, "y": 2500, "map_ready": True, "weight": 6, "name": "OPS"},
+            {"x": 2510, "y": 2500, "map_ready": True, "weight": 1, "name": "Moon"},
+        ]
+        point = {"x": 2500, "y": 2500}
+
+        result = evaluate_alstation_at(point, targets, [], levels=[1, 12])
+
+        self.assertEqual(result[0]["level"], 12)
+        self.assertGreaterEqual(result[0]["covered_weight"], 7)
+        self.assertTrue(all("score" in item for item in result))
 
 
 if __name__ == "__main__":
