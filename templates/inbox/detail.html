@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Входящее #{{ item['id'] }} - AURUS{% endblock %}
+{% block page_title %}Входящее #{{ item['id'] }}{% endblock %}
+{% block content %}
+
+<div class="mb-3 d-flex gap-2">
+    <a href="{{ url_for('inbox.list_items') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад</a>
+    <form method="POST" action="{{ url_for('inbox.reparse', item_id=item['id']) }}">
+        <button class="btn btn-sm btn-outline-info"><i class="bi bi-magic"></i> Разобрать заново</button>
+    </form>
+    <form method="POST" action="{{ url_for('inbox.change_status', item_id=item['id']) }}" class="d-flex gap-2">
+        <select name="status" class="form-select form-select-sm">
+            {% for status in statuses %}
+            <option value="{{ status }}" {% if item['status'] == status %}selected{% endif %}>{{ status }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn btn-sm btn-outline-primary">Сменить статус</button>
+    </form>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="panel mb-3">
+            <div class="panel-header"><h6>Исходный текст</h6></div>
+            <div class="panel-body">
+                <div class="mb-2">
+                    <span class="badge bg-secondary">{{ item['status'] }}</span>
+                    <span class="badge {% if item['priority'] == 'Критический' %}bg-danger{% elif item['priority'] == 'Высокий' %}bg-warning text-dark{% else %}bg-info{% endif %}">
+                        {{ item['priority'] or '-' }}
+                    </span>
+                </div>
+                <div class="p-3 rounded" style="background:var(--bg-main);white-space:pre-wrap;">{{ item['raw_text'] }}</div>
+                <div class="small text-muted mt-2">
+                    Источник: {{ item['source_type'] or '-' }} · Игрок: {{ item['player_nick'] or '-' }} · {{ item['created_at'][:16] if item['created_at'] else '' }}
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header"><h6>Что найдено</h6></div>
+            <div class="panel-body">
+                <div class="mb-2"><strong>Тип:</strong> {{ analysis.category_label or item['category'] or '-' }}</div>
+                <div class="mb-2"><strong>Сводка:</strong> {{ item['summary'] or '-' }}</div>
+                <div class="mb-2">
+                    <strong>Игроки:</strong>
+                    {% for p in analysis.players or [] %}
+                    <a class="link-accent" href="{{ url_for('players.card', player_id=p.id) }}">{{ p.nick }}</a>{% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                    {% if not analysis.players %}-{% endif %}
+                </div>
+                <div>
+                    <strong>Координаты:</strong>
+                    {% for c in analysis.coordinates or [] %}
+                    <a class="link-accent" href="{{ url_for('map.index') }}?focus={{ c.text }}"><code>{{ c.text }}</code></a>{% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                    {% if not analysis.coordinates %}-{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="panel">
+            <div class="panel-header">
+                <h6>Предложенные действия</h6>
+                <span class="small text-muted">Подтверждайте только нужное</span>
+            </div>
+            <div class="panel-body">
+                {% for proposal in proposals %}
+                <div class="p-3 rounded mb-3" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
+                        <div>
+                            <div class="fw-semibold">
+                                {% if proposal.kind == 'task' %}<i class="bi bi-list-check text-info"></i> Задача
+                                {% elif proposal.kind == 'request' %}<i class="bi bi-life-preserver text-warning"></i> Заявка
+                                {% elif proposal.kind == 'note' %}<i class="bi bi-person-lines-fill text-primary"></i> Заметка игроку
+                                {% elif proposal.kind == 'log' %}<i class="bi bi-journal-text text-success"></i> Журнал
+                                {% else %}Действие{% endif %}
+                            </div>
+                            <div>{{ proposal.title }}</div>
+                            <small class="text-muted">
+                                {{ proposal.priority or item['priority'] or '' }}
+                                {% if proposal.coordinates %} · {{ proposal.coordinates }}{% endif %}
+                                {% if proposal.direction %} · {{ proposal.direction }}{% endif %}
+                            </small>
+                        </div>
+                        <form method="POST" action="{{ url_for('inbox.apply_action', item_id=item['id']) }}">
+                            <input type="hidden" name="proposal_idx" value="{{ loop.index0 }}">
+                            <input type="hidden" name="action" value="{{ proposal.kind }}">
+                            <button class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-check2"></i> Создать
+                            </button>
+                        </form>
+                    </div>
+                    {% if proposal.description or proposal.content %}
+                    <div class="small text-muted mt-2">{{ (proposal.description or proposal.content)[:220] }}{% if (proposal.description or proposal.content)|length > 220 %}...{% endif %}</div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                {% if not proposals %}
+                <div class="text-muted text-center py-4">Нет предложенных действий. Запустите разбор заново.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

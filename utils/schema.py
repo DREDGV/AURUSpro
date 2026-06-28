@@ -80,6 +80,28 @@ def ensure_alliance_schema(db):
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )"""
     )
+    db.execute(
+        """CREATE TABLE IF NOT EXISTS intake_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_type TEXT DEFAULT 'message',
+            source_player_id INTEGER,
+            raw_text TEXT NOT NULL,
+            status TEXT DEFAULT 'Новое',
+            category TEXT,
+            priority TEXT,
+            summary TEXT,
+            analysis_json TEXT,
+            proposals_json TEXT,
+            created_task_id INTEGER,
+            created_request_id INTEGER,
+            created_note_id INTEGER,
+            created_log_id INTEGER,
+            author TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (source_player_id) REFERENCES players(id) ON DELETE SET NULL
+        )"""
+    )
 
     _add_column_if_missing(db, "tasks", "coordinates", "TEXT")
     _add_column_if_missing(db, "tasks", "map_object_id", "INTEGER")

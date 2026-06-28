@@ -212,6 +212,27 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )''')
 
+    c.execute('''CREATE TABLE intake_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_type TEXT DEFAULT 'message',
+        source_player_id INTEGER,
+        raw_text TEXT NOT NULL,
+        status TEXT DEFAULT 'Новое',
+        category TEXT,
+        priority TEXT,
+        summary TEXT,
+        analysis_json TEXT,
+        proposals_json TEXT,
+        created_task_id INTEGER,
+        created_request_id INTEGER,
+        created_note_id INTEGER,
+        created_log_id INTEGER,
+        author TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (source_player_id) REFERENCES players(id) ON DELETE SET NULL
+    )''')
+
     c.execute('''CREATE TABLE questionnaires (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         player_id INTEGER,

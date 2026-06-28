@@ -10,6 +10,7 @@ from routes.tasks import tasks
 from routes.questionnaires import questionnaires
 from routes.alliance import alliance
 from routes.center import center
+from routes.inbox import inbox
 from routes.myaccounts import myaccounts
 from routes.map import map_bp
 
@@ -27,5 +28,6 @@ def register_blueprints(app):
     app.register_blueprint(questionnaires)
     app.register_blueprint(alliance)
     app.register_blueprint(center)
+    app.register_blueprint(inbox)
     app.register_blueprint(myaccounts)
     app.register_blueprint(map_bp)

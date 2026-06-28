@@ -41,6 +41,14 @@
             <div class="stat-change text-success" style="font-size:11px;">{{ resolved_requests }} решено</div>
         </div>
     </div>
+    <div class="stat-card" style="cursor:pointer;" onclick="window.location='{{ url_for('inbox.list_items') }}'">
+        <div class="stat-icon blue"><i class="bi bi-inbox"></i></div>
+        <div>
+            <div class="stat-value">{{ inbox_new + inbox_pending }}</div>
+            <div class="stat-label">Входящие</div>
+            <div class="stat-change" style="font-size:11px;">{{ inbox_new }} новых · {{ inbox_pending }} ждут</div>
+        </div>
+    </div>
 </div>
 
 <div class="panel mb-3">
@@ -48,6 +56,7 @@
         <h6><i class="bi bi-command me-2"></i>Требует внимания</h6>
         <div class="d-flex gap-2">
             <a href="{{ url_for('tasks.create') }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i> Задача</a>
+            <a href="{{ url_for('inbox.list_items') }}" class="btn btn-sm btn-outline-info"><i class="bi bi-inbox"></i> Входящие</a>
             <a href="{{ url_for('center.create_request') }}" class="btn btn-sm btn-outline-secondary">Заявка</a>
             <a href="{{ url_for('center.create_decision') }}" class="btn btn-sm btn-outline-secondary">Решение</a>
             <a href="{{ url_for('center.create_log') }}" class="btn btn-sm btn-outline-secondary">Журнал</a>

@@ -48,6 +48,10 @@ def index():
     resolved_requests = db.execute(
         "SELECT COUNT(*) FROM requests WHERE status IN ('Выполнен', 'Отклонён')"
     ).fetchone()[0]
+    inbox_new = db.execute("SELECT COUNT(*) FROM intake_items WHERE status = 'Новое'").fetchone()[0]
+    inbox_pending = db.execute(
+        "SELECT COUNT(*) FROM intake_items WHERE status IN ('Разобрано', 'Требует подтверждения')"
+    ).fetchone()[0]
 
     help_needed = db.execute(
         "SELECT id, nick, needs_help_with FROM players "
@@ -87,6 +91,8 @@ def index():
         active_players=active_players,
         total_requests=total_requests,
         resolved_requests=resolved_requests,
+        inbox_new=inbox_new,
+        inbox_pending=inbox_pending,
         help_needed=help_needed,
         open_tasks=open_tasks,
         map_tasks=map_tasks,
