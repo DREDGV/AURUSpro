@@ -97,7 +97,7 @@ def list():
             'SELECT DISTINCT direction FROM tasks WHERE direction IS NOT NULL AND direction != "" ORDER BY direction'
         ).fetchall()
     ]
-    directions = list(dict.fromkeys(TASK_DIRECTIONS + dynamic_directions))
+    directions = [*dict.fromkeys(TASK_DIRECTIONS + dynamic_directions)]
     db.close()
     return render_template(
         'tasks/list.html',
