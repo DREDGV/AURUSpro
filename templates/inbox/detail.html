@@ -1,10 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Входящее #{{ item['id'] }} - AURUS{% endblock %}
-{% block page_title %}Входящее #{{ item['id'] }}{% endblock %}
+{% block page_title %}Разбор входящего #{{ item['id'] }}{% endblock %}
 {% block content %}
+{% set detected_players = analysis.players or [] %}
+{% set detected_coords = analysis.coordinates or [] %}
+{% set first_coord = detected_coords[0].text if detected_coords else '' %}
+{% set first_player_id = item['source_player_id'] or (detected_players[0].id if detected_players else '') %}
 
-<div class="mb-3 d-flex gap-2">
-    <a href="{{ url_for('inbox.list_items') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад</a>
+<div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
+    <a href="{{ url_for('inbox.list_items') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Назад
+    </a>
     <form method="POST" action="{{ url_for('inbox.reparse', item_id=item['id']) }}">
         <button class="btn btn-sm btn-outline-info"><i class="bi bi-magic"></i> Разобрать заново</button>
     </form>
@@ -16,18 +22,35 @@
         </select>
         <button class="btn btn-sm btn-outline-primary">Сменить статус</button>
     </form>
+    <form method="POST" action="{{ url_for('inbox.change_status', item_id=item['id']) }}">
+        <input type="hidden" name="status" value="В работе">
+        <button class="btn btn-sm btn-outline-warning"><i class="bi bi-hourglass-split"></i> В работу</button>
+    </form>
+    <form method="POST" action="{{ url_for('inbox.change_status', item_id=item['id']) }}">
+        <input type="hidden" name="status" value="Обработано">
+        <input type="hidden" name="redirect_next" value="1">
+        <button class="btn btn-sm btn-success"><i class="bi bi-check2-circle"></i> Обработано и дальше</button>
+    </form>
+    {% if next_item %}
+    <a href="{{ url_for('inbox.detail', item_id=next_item['id']) }}" class="btn btn-sm btn-outline-secondary ms-auto">
+        Следующее <i class="bi bi-arrow-right"></i>
+    </a>
+    {% endif %}
 </div>
 
 <div class="row g-3">
-    <div class="col-lg-5">
+    <div class="col-xl-5 col-lg-6">
         <div class="panel mb-3">
-            <div class="panel-header"><h6>Исходный текст</h6></div>
+            <div class="panel-header">
+                <h6><i class="bi bi-chat-left-text me-2"></i>Исходное сообщение</h6>
+                <span class="badge bg-secondary">{{ item['status'] }}</span>
+            </div>
             <div class="panel-body">
-                <div class="mb-2">
-                    <span class="badge bg-secondary">{{ item['status'] }}</span>
+                <div class="mb-2 d-flex flex-wrap gap-2">
                     <span class="badge {% if item['priority'] == 'Критический' %}bg-danger{% elif item['priority'] == 'Высокий' %}bg-warning text-dark{% else %}bg-info{% endif %}">
                         {{ item['priority'] or '-' }}
                     </span>
+                    <span class="badge bg-dark border">{{ analysis.category_label or item['category'] or '-' }}</span>
                 </div>
                 <div class="p-3 rounded" style="background:var(--bg-main);white-space:pre-wrap;">{{ item['raw_text'] }}</div>
                 <div class="small text-muted mt-2">
@@ -36,33 +59,133 @@
             </div>
         </div>
 
-        <div class="panel">
-            <div class="panel-header"><h6>Что найдено</h6></div>
+        <div class="panel mb-3">
+            <div class="panel-header"><h6><i class="bi bi-search me-2"></i>Что найдено</h6></div>
             <div class="panel-body">
-                <div class="mb-2"><strong>Тип:</strong> {{ analysis.category_label or item['category'] or '-' }}</div>
                 <div class="mb-2"><strong>Сводка:</strong> {{ item['summary'] or '-' }}</div>
                 <div class="mb-2">
                     <strong>Игроки:</strong>
-                    {% for p in analysis.players or [] %}
+                    {% for p in detected_players %}
                     <a class="link-accent" href="{{ url_for('players.card', player_id=p.id) }}">{{ p.nick }}</a>{% if not loop.last %}, {% endif %}
                     {% endfor %}
-                    {% if not analysis.players %}-{% endif %}
+                    {% if not detected_players %}-{% endif %}
                 </div>
                 <div>
                     <strong>Координаты:</strong>
-                    {% for c in analysis.coordinates or [] %}
+                    {% for c in detected_coords %}
                     <a class="link-accent" href="{{ url_for('map.index') }}?focus={{ c.text }}"><code>{{ c.text }}</code></a>{% if not loop.last %}, {% endif %}
                     {% endfor %}
-                    {% if not analysis.coordinates %}-{% endif %}
+                    {% if not detected_coords %}-{% endif %}
                 </div>
             </div>
         </div>
+
+        {% if item['created_task_id'] or item['created_request_id'] or item['created_note_id'] or item['created_log_id'] %}
+        <div class="panel">
+            <div class="panel-header"><h6><i class="bi bi-link-45deg me-2"></i>Уже создано</h6></div>
+            <div class="panel-body d-flex flex-wrap gap-2">
+                {% if item['created_task_id'] %}
+                <a class="btn btn-sm btn-outline-info" href="{{ url_for('tasks.detail', task_id=item['created_task_id']) }}">
+                    <i class="bi bi-list-check"></i> Задача #{{ item['created_task_id'] }}
+                </a>
+                {% endif %}
+                {% if item['created_request_id'] %}
+                <a class="btn btn-sm btn-outline-warning" href="{{ url_for('center.request_detail', request_id=item['created_request_id']) }}">
+                    <i class="bi bi-life-preserver"></i> Заявка #{{ item['created_request_id'] }}
+                </a>
+                {% endif %}
+                {% if item['created_note_id'] %}
+                <span class="btn btn-sm btn-outline-primary disabled"><i class="bi bi-person-lines-fill"></i> Заметка #{{ item['created_note_id'] }}</span>
+                {% endif %}
+                {% if item['created_log_id'] %}
+                <a class="btn btn-sm btn-outline-success" href="{{ url_for('center.log') }}">
+                    <i class="bi bi-journal-text"></i> Журнал #{{ item['created_log_id'] }}
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 
-    <div class="col-lg-7">
+    <div class="col-xl-7 col-lg-6">
+        <div class="panel mb-3">
+            <div class="panel-header">
+                <h6><i class="bi bi-lightning-charge me-2"></i>Быстрые решения</h6>
+                <span class="small text-muted">Создать вручную, если авторазбор предложил не все</span>
+            </div>
+            <div class="panel-body">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <form method="POST" action="{{ url_for('inbox.apply_action', item_id=item['id']) }}" class="p-3 rounded h-100" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);">
+                            <input type="hidden" name="action" value="task">
+                            <input type="hidden" name="coordinates" value="{{ first_coord }}">
+                            <label class="form-label small mb-1">Задача</label>
+                            <input name="title" class="form-control form-control-sm mb-2" value="{{ item['summary'] or 'Задача из входящего' }}">
+                            <div class="d-flex gap-2">
+                                <select name="direction" class="form-select form-select-sm">
+                                    <option value="Карта">Карта</option>
+                                    <option value="Алстанции">Алстанции</option>
+                                    <option value="Помощь игрокам">Помощь игрокам</option>
+                                    <option value="Разведка">Разведка</option>
+                                    <option value="Атака">Атака</option>
+                                    <option value="Развитие">Развитие</option>
+                                    <option value="Дипломатия">Дипломатия</option>
+                                </select>
+                                <select name="priority" class="form-select form-select-sm">
+                                    <option>{{ item['priority'] or 'Средний' }}</option>
+                                    <option>Критический</option>
+                                    <option>Высокий</option>
+                                    <option>Средний</option>
+                                    <option>Низкий</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-sm btn-outline-info mt-2"><i class="bi bi-list-check"></i> Создать задачу</button>
+                        </form>
+                    </div>
+                    <div class="col-md-6">
+                        <form method="POST" action="{{ url_for('inbox.apply_action', item_id=item['id']) }}" class="p-3 rounded h-100" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);">
+                            <input type="hidden" name="action" value="request">
+                            <label class="form-label small mb-1">Заявка игрока</label>
+                            <select name="player_id" class="form-select form-select-sm mb-2">
+                                <option value="">Игрок не выбран</option>
+                                {% for p in players %}
+                                <option value="{{ p['id'] }}" {% if first_player_id|string == p['id']|string %}selected{% endif %}>{{ p['nick'] }}</option>
+                                {% endfor %}
+                            </select>
+                            <input name="title" class="form-control form-control-sm mb-2" value="{{ item['summary'] or 'Обращение игрока' }}">
+                            <button class="btn btn-sm btn-outline-warning"><i class="bi bi-life-preserver"></i> Создать заявку</button>
+                        </form>
+                    </div>
+                    <div class="col-md-6">
+                        <form method="POST" action="{{ url_for('inbox.apply_action', item_id=item['id']) }}" class="p-3 rounded h-100" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);">
+                            <input type="hidden" name="action" value="note">
+                            <label class="form-label small mb-1">Заметка игроку</label>
+                            <select name="player_id" class="form-select form-select-sm mb-2">
+                                <option value="">Игрок не выбран</option>
+                                {% for p in players %}
+                                <option value="{{ p['id'] }}" {% if first_player_id|string == p['id']|string %}selected{% endif %}>{{ p['nick'] }}</option>
+                                {% endfor %}
+                            </select>
+                            <textarea name="content" class="form-control form-control-sm mb-2" rows="2">{{ item['summary'] or item['raw_text'] }}</textarea>
+                            <button class="btn btn-sm btn-outline-primary"><i class="bi bi-person-lines-fill"></i> Записать заметку</button>
+                        </form>
+                    </div>
+                    <div class="col-md-6">
+                        <form method="POST" action="{{ url_for('inbox.apply_action', item_id=item['id']) }}" class="p-3 rounded h-100" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);">
+                            <input type="hidden" name="action" value="log">
+                            <label class="form-label small mb-1">Журнал штаба</label>
+                            <input name="title" class="form-control form-control-sm mb-2" value="{{ item['summary'] or 'Входящее' }}">
+                            <textarea name="description" class="form-control form-control-sm mb-2" rows="2">{{ item['raw_text'] }}</textarea>
+                            <button class="btn btn-sm btn-outline-success"><i class="bi bi-journal-text"></i> Записать в журнал</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="panel">
             <div class="panel-header">
-                <h6>Предложенные действия</h6>
+                <h6><i class="bi bi-stars me-2"></i>Предложенные действия</h6>
                 <span class="small text-muted">Подтверждайте только нужное</span>
             </div>
             <div class="panel-body">
@@ -98,7 +221,7 @@
                 </div>
                 {% endfor %}
                 {% if not proposals %}
-                <div class="text-muted text-center py-4">Нет предложенных действий. Запустите разбор заново.</div>
+                <div class="text-muted text-center py-4">Нет предложенных действий. Запустите разбор заново или используйте быстрые решения выше.</div>
                 {% endif %}
             </div>
         </div>

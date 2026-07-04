@@ -182,6 +182,19 @@ def detail(item_id):
         db.close()
         return redirect(url_for('inbox.list_items'))
     players = _players(db)
+    next_item = db.execute(
+        """SELECT id FROM intake_items
+           WHERE id != ? AND status IN ('Новое', 'Разобрано', 'Требует подтверждения', 'В работе')
+           ORDER BY CASE status
+               WHEN 'Новое' THEN 0
+               WHEN 'Требует подтверждения' THEN 1
+               WHEN 'Разобрано' THEN 2
+               WHEN 'В работе' THEN 3
+               ELSE 4
+           END, created_at ASC
+           LIMIT 1""",
+        (item_id,),
+    ).fetchone()
     db.close()
     return render_template(
         'inbox/detail.html',
@@ -189,6 +202,7 @@ def detail(item_id):
         analysis=_load_analysis(item),
         proposals=_load_proposals(item),
         players=players,
+        next_item=next_item,
         statuses=INBOX_STATUSES,
     )
 
@@ -221,8 +235,25 @@ def change_status(item_id):
         'UPDATE intake_items SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
         (status, item_id),
     )
+    next_item = None
+    if request.form.get('redirect_next') == '1':
+        next_item = db.execute(
+            """SELECT id FROM intake_items
+               WHERE id != ? AND status IN ('Новое', 'Разобрано', 'Требует подтверждения', 'В работе')
+               ORDER BY CASE status
+                   WHEN 'Новое' THEN 0
+                   WHEN 'Требует подтверждения' THEN 1
+                   WHEN 'Разобрано' THEN 2
+                   WHEN 'В работе' THEN 3
+                   ELSE 4
+               END, created_at ASC
+               LIMIT 1""",
+            (item_id,),
+        ).fetchone()
     db.commit()
     db.close()
+    if next_item:
+        return redirect(url_for('inbox.detail', item_id=next_item['id']))
     return redirect(url_for('inbox.detail', item_id=item_id))
 
 
