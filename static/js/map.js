@@ -2612,10 +2612,11 @@ class GameMap {
             : task.status === "Ожидает"
               ? "#a29bfe"
               : "#00cec9";
+      const isUrgent = task.priority === "Критический" || task.priority === "Высокий";
       c.save();
-      c.fillStyle = "rgba(10,14,20,0.85)";
+      c.fillStyle = isUrgent ? "rgba(80,20,28,0.9)" : "rgba(10,14,20,0.85)";
       c.strokeStyle = color;
-      c.lineWidth = 2;
+      c.lineWidth = isUrgent ? 3 : 2;
       c.beginPath();
       if (typeof c.roundRect === "function") {
         c.roundRect(sp.x - 9, sp.y - 9, 18, 18, 4);
@@ -2769,6 +2770,28 @@ class GameMap {
     }
     if (obj.url)
       html += `<div><a href="${obj.url}" style="color:#6c5ce7;">Открыть →</a></div>`;
+    this.tooltip.innerHTML = html;
+    this.tooltip.style.display = "block";
+    this.tooltip.style.left = sx + 15 + "px";
+    this.tooltip.style.top = sy - 10 + "px";
+  }
+
+  showTaskTooltip(task, sx, sy) {
+    if (!this.tooltip) return;
+    let html = `<div class="tooltip-title">${this._escapeHtml(task.title || "Задача")}</div>`;
+    html += `<div style="margin-top:4px;font-size:11px;">Координаты: ${task.x}:${task.y}:${task.z || 0}</div>`;
+    if (task.priority || task.status)
+      html += `<div>${this._escapeHtml(task.priority || "-")} · ${this._escapeHtml(task.status || "-")}</div>`;
+    if (task.assignee_nick)
+      html += `<div>Исполнитель: ${this._escapeHtml(task.assignee_nick)}</div>`;
+    if (task.deadline)
+      html += `<div>Срок: ${this._escapeHtml(task.deadline)}</div>`;
+    if (task.task_type_label)
+      html += `<div>Тип: ${this._escapeHtml(task.task_type_label)}</div>`;
+    if (task.comment)
+      html += `<div style="margin-top:4px;color:#b2bec3;">${this._escapeHtml(task.comment)}</div>`;
+    if (task.url)
+      html += `<div><a href="${task.url}" style="color:#6c5ce7;">Открыть →</a></div>`;
     this.tooltip.innerHTML = html;
     this.tooltip.style.display = "block";
     this.tooltip.style.left = sx + 15 + "px";
@@ -3089,10 +3112,15 @@ class GameMap {
     this._updateCoordHud(this.cursorPoint, "");
     const coordHit = this.findCoordHitAt(mx, my);
     const obj = this.findObjectAt(mx, my);
+    const taskObj = this.findTaskAt(mx, my);
     const suggestionObj = this.findSuggestionAt(mx, my);
     if (coordHit) {
       this.highlightedObj = null;
       this.hideTooltip();
+      this.canvas.style.cursor = "pointer";
+    } else if (taskObj) {
+      this.highlightedObj = null;
+      this.showTaskTooltip(taskObj, mx, my);
       this.canvas.style.cursor = "pointer";
     } else if (obj) {
       this.highlightedObj = obj;

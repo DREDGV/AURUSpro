@@ -7,7 +7,10 @@ tasks = Blueprint('tasks', __name__)
 
 
 TASK_DIRECTIONS = ['Карта', 'Алстанции', 'Помощь игрокам', 'Разведка', 'Атака', 'Развитие', 'Дипломатия']
-TASK_TYPES = ['build_alstation', 'move_alstation', 'check_network', 'scout_point', 'support_player', 'other']
+TASK_TYPES = [
+    'build_alstation', 'move_alstation', 'check_network', 'scout_point',
+    'support_player', 'defense_response', 'answer_question', 'diplomacy', 'other'
+]
 TASK_STATUSES = ['Новая', 'В работе', 'Ожидает', 'Выполнена', 'Отменена']
 TASK_PRIORITIES = ['Критический', 'Высокий', 'Средний', 'Низкий']
 

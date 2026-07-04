@@ -96,6 +96,10 @@ def ensure_alliance_schema(db):
             created_request_id INTEGER,
             created_note_id INTEGER,
             created_log_id INTEGER,
+            due_at TIMESTAMP,
+            auto_assignee_id INTEGER,
+            auto_assignee_reason TEXT,
+            map_alert INTEGER DEFAULT 0,
             author TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -108,4 +112,8 @@ def ensure_alliance_schema(db):
     _add_column_if_missing(db, "tasks", "map_object_type", "TEXT")
     _add_column_if_missing(db, "tasks", "task_type", "TEXT")
     _add_column_if_missing(db, "tasks", "updated_at", "TIMESTAMP")
+    _add_column_if_missing(db, "intake_items", "due_at", "TIMESTAMP")
+    _add_column_if_missing(db, "intake_items", "auto_assignee_id", "INTEGER")
+    _add_column_if_missing(db, "intake_items", "auto_assignee_reason", "TEXT")
+    _add_column_if_missing(db, "intake_items", "map_alert", "INTEGER DEFAULT 0")
     db.commit()

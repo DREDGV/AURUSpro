@@ -103,7 +103,14 @@
                                 <a class="link-accent fw-semibold" href="{{ url_for('inbox.detail', item_id=item['id']) }}">
                                     {{ item['summary'] or item['raw_text'][:90] }}
                                 </a>
-                                <br><small class="text-muted">{{ item['category'] or '-' }} · {{ item['created_at'][:16] if item['created_at'] else '' }}</small>
+                                <br><small class="text-muted">
+                                    {{ item['category'] or '-' }} · {{ item['created_at'][:16] if item['created_at'] else '' }}
+                                    {% if item['auto_assignee_nick'] %} · {{ item['auto_assignee_nick'] }}{% endif %}
+                                    {% if item['due_at'] %}
+                                        · <span class="{% if item['due_at'] < now_ts and item['status'] not in ['Обработано', 'Отклонено'] %}text-danger{% endif %}">до {{ item['due_at'] }}</span>
+                                    {% endif %}
+                                    {% if item['map_alert'] %} · карта{% endif %}
+                                </small>
                             </td>
                             <td><small>{{ item['player_nick'] or '-' }}</small></td>
                             <td>

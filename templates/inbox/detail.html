@@ -69,6 +69,24 @@
                     {% if analysis.routing and analysis.routing.task_type %} · {{ analysis.routing.task_type }}{% endif %}
                 </div>
                 <div class="mb-2">
+                    <strong>Исполнитель:</strong>
+                    {% if item['auto_assignee_nick'] %}
+                    <a class="link-accent" href="{{ url_for('players.card', player_id=item['auto_assignee_id']) }}">{{ item['auto_assignee_nick'] }}</a>
+                    <small class="text-muted">· {{ item['auto_assignee_reason'] or 'автоназначение' }}</small>
+                    {% else %}
+                    -
+                    {% endif %}
+                </div>
+                <div class="mb-2">
+                    <strong>Срок реакции:</strong>
+                    {% if item['due_at'] %}
+                    <span class="{% if item['due_at'] < now_ts and item['status'] not in ['Обработано', 'Отклонено'] %}text-danger fw-semibold{% endif %}">{{ item['due_at'] }}</span>
+                    {% if analysis.sla and analysis.sla.hours %}<small class="text-muted">· {{ analysis.sla.hours }} ч</small>{% endif %}
+                    {% else %}
+                    -
+                    {% endif %}
+                </div>
+                <div class="mb-2">
                     <strong>Игроки:</strong>
                     {% for p in detected_players %}
                     <a class="link-accent" href="{{ url_for('players.card', player_id=p.id) }}">{{ p.nick }}</a>{% if not loop.last %}, {% endif %}
@@ -124,6 +142,8 @@
                         <form method="POST" action="{{ url_for('inbox.apply_action', item_id=item['id']) }}" class="p-3 rounded h-100" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);">
                             <input type="hidden" name="action" value="task">
                             <input type="hidden" name="coordinates" value="{{ first_coord }}">
+                            <input type="hidden" name="assignee_id" value="{{ item['auto_assignee_id'] or '' }}">
+                            <input type="hidden" name="deadline" value="{{ item['due_at'] or '' }}">
                             <label class="form-label small mb-1">Задача</label>
                             <input name="title" class="form-control form-control-sm mb-2" value="{{ item['summary'] or 'Задача из входящего' }}">
                             <div class="d-flex gap-2">
@@ -210,6 +230,8 @@
                                 {{ proposal.priority or item['priority'] or '' }}
                                 {% if proposal.coordinates %} · {{ proposal.coordinates }}{% endif %}
                                 {% if proposal.direction %} · {{ proposal.direction }}{% endif %}
+                                {% if proposal.assignee_nick %} · {{ proposal.assignee_nick }}{% endif %}
+                                {% if item['due_at'] %} · до {{ item['due_at'] }}{% endif %}
                             </small>
                             {% if proposal.route_reason %}
                             <div class="small text-muted mt-1">{{ proposal.route_reason }}</div>

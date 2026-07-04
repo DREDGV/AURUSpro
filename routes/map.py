@@ -271,6 +271,9 @@ def _task_type_label(value):
         'check_network': 'Проверить сеть',
         'scout_point': 'Разведать точку',
         'support_player': 'Помочь игроку',
+        'defense_response': 'Организовать защиту',
+        'answer_question': 'Ответить на вопрос',
+        'diplomacy': 'Дипломатия',
         'other': 'Другое',
     }
     return labels.get(value or 'other', value or 'Другое')
@@ -288,6 +291,7 @@ def _task_payload(row):
         'priority': row['priority'],
         'status': row['status'],
         'deadline': row['deadline'],
+        'comment': row['comment'],
         'coordinates': row['coordinates'],
         'task_type': row['task_type'] or 'other',
         'task_type_label': _task_type_label(row['task_type']),

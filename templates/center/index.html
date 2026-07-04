@@ -49,6 +49,14 @@
             <div class="stat-change" style="font-size:11px;">{{ inbox_new }} новых · {{ inbox_pending }} ждут</div>
         </div>
     </div>
+    <div class="stat-card" style="cursor:pointer;" onclick="window.location='{{ url_for('inbox.list_items') }}'">
+        <div class="stat-icon red"><i class="bi bi-alarm"></i></div>
+        <div>
+            <div class="stat-value">{{ overdue_inbox + overdue_tasks }}</div>
+            <div class="stat-label">Просрочено</div>
+            <div class="stat-change text-danger" style="font-size:11px;">{{ overdue_inbox }} входящих · {{ overdue_tasks }} задач</div>
+        </div>
+    </div>
 </div>
 
 <div class="panel mb-3">
@@ -63,6 +71,23 @@
         </div>
     </div>
     <div class="panel-body">
+        {% if urgent_inbox %}
+        <div class="mb-3 p-3 rounded" style="background:rgba(255,82,82,0.08);border:1px solid rgba(255,82,82,0.22);">
+            <div class="small text-muted fw-bold text-uppercase mb-2">Срочная очередь входящих</div>
+            <div class="row g-2">
+                {% for item in urgent_inbox[:3] %}
+                <div class="col-md-4">
+                    <a href="{{ url_for('inbox.detail', item_id=item['id']) }}" class="link-accent fw-semibold">{{ item['summary'] or item['raw_text'][:70] }}</a>
+                    <br><small class="text-muted">
+                        {{ item['priority'] or '-' }}
+                        {% if item['due_at'] %} · до {{ item['due_at'] }}{% endif %}
+                        {% if item['auto_assignee_nick'] %} · {{ item['auto_assignee_nick'] }}{% endif %}
+                    </small>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
         <div class="row g-3">
             <div class="col-md-4">
                 <div class="small text-muted fw-bold text-uppercase mb-2">Открытые задачи</div>

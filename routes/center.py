@@ -52,6 +52,30 @@ def index():
     inbox_pending = db.execute(
         "SELECT COUNT(*) FROM intake_items WHERE status IN ('Разобрано', 'Требует подтверждения')"
     ).fetchone()[0]
+    overdue_inbox = db.execute(
+        """SELECT COUNT(*) FROM intake_items
+           WHERE due_at IS NOT NULL AND due_at < strftime('%Y-%m-%d %H:%M', 'now', 'localtime')
+             AND status NOT IN ('Обработано', 'Отклонено')"""
+    ).fetchone()[0]
+    overdue_tasks = db.execute(
+        """SELECT COUNT(*) FROM tasks
+           WHERE deadline IS NOT NULL AND deadline != ''
+             AND deadline < strftime('%Y-%m-%d %H:%M', 'now', 'localtime')
+             AND (status IS NULL OR status NOT IN ('Выполнена', 'Отменена'))"""
+    ).fetchone()[0]
+    urgent_inbox = db.execute(
+        """SELECT i.*, p.nick AS player_nick, ap.nick AS auto_assignee_nick
+           FROM intake_items i
+           LEFT JOIN players p ON p.id = i.source_player_id
+           LEFT JOIN players ap ON ap.id = i.auto_assignee_id
+           WHERE i.status NOT IN ('Обработано', 'Отклонено')
+           ORDER BY
+             CASE WHEN i.due_at IS NOT NULL AND i.due_at < strftime('%Y-%m-%d %H:%M', 'now', 'localtime') THEN 0 ELSE 1 END,
+             CASE i.priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END,
+             i.due_at ASC,
+             i.created_at DESC
+           LIMIT 6"""
+    ).fetchall()
 
     help_needed = db.execute(
         "SELECT id, nick, needs_help_with FROM players "
@@ -93,6 +117,9 @@ def index():
         resolved_requests=resolved_requests,
         inbox_new=inbox_new,
         inbox_pending=inbox_pending,
+        overdue_inbox=overdue_inbox,
+        overdue_tasks=overdue_tasks,
+        urgent_inbox=urgent_inbox,
         help_needed=help_needed,
         open_tasks=open_tasks,
         map_tasks=map_tasks,
