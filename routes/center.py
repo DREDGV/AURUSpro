@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, session, redirect, url_for, request, flash, jsonify
 from utils.db import get_db
 from utils.schema import ensure_alliance_schema
-from routes.map import _existing_alstations, _network_issue_payload
+from routes.map import _existing_alstations, _network_issue_payload, _intake_alerts
 import json
 
 center = Blueprint('center', __name__)
@@ -103,6 +103,7 @@ def index():
         for station in _existing_alstations(db)
         if station.get('network_status') in ('signal_only', 'isolated')
     ]
+    map_intake_alerts = _intake_alerts(db, limit=50)[:6]
 
     db.close()
     return render_template('center/index.html',
@@ -123,6 +124,7 @@ def index():
         help_needed=help_needed,
         open_tasks=open_tasks,
         map_tasks=map_tasks,
+        map_intake_alerts=map_intake_alerts,
         network_issues=network_issues)
 
 

@@ -22,6 +22,24 @@
     </div>
 </div>
 
+<div class="d-flex flex-wrap gap-2 mb-3">
+    <a class="btn btn-sm {% if not current_view %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('inbox.list_items') }}">
+        Все
+    </a>
+    <a class="btn btn-sm {% if current_view == 'urgent' %}btn-danger{% else %}btn-outline-danger{% endif %}" href="{{ url_for('inbox.list_items', view='urgent') }}">
+        Срочные · {{ stats.urgent }}
+    </a>
+    <a class="btn btn-sm {% if current_view == 'overdue' %}btn-warning{% else %}btn-outline-warning{% endif %}" href="{{ url_for('inbox.list_items', view='overdue') }}">
+        Просрочка · {{ stats.overdue }}
+    </a>
+    <a class="btn btn-sm {% if current_view == 'map' %}btn-info{% else %}btn-outline-info{% endif %}" href="{{ url_for('inbox.list_items', view='map') }}">
+        Карта · {{ stats.map }}
+    </a>
+    <a class="btn btn-sm {% if current_view == 'unassigned' %}btn-secondary{% else %}btn-outline-secondary{% endif %}" href="{{ url_for('inbox.list_items', view='unassigned') }}">
+        Без исполнителя · {{ stats.unassigned }}
+    </a>
+</div>
+
 <div class="row g-3">
     <div class="col-lg-5">
         <div class="panel">

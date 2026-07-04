@@ -336,6 +336,41 @@ def _intake_alert_payload(row, coord):
     }
 
 
+def _intake_alerts(db, limit=300):
+    rows = db.execute(
+        '''SELECT i.*, p.nick AS player_nick, ap.nick AS assignee_nick
+           FROM intake_items i
+           LEFT JOIN players p ON p.id = i.source_player_id
+           LEFT JOIN players ap ON ap.id = i.auto_assignee_id
+           WHERE i.status NOT IN ('Обработано', 'Отклонено')
+           ORDER BY
+             CASE i.priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END,
+             i.created_at DESC
+           LIMIT ?''',
+        (limit,),
+    ).fetchall()
+    alerts = []
+    for row in rows:
+        try:
+            analysis = json.loads(row['analysis_json'] or '{}')
+        except json.JSONDecodeError:
+            analysis = {}
+        coordinates = analysis.get('coordinates') or extract_coordinates(row['raw_text'] or '')
+        for coord in coordinates:
+            try:
+                coord = {
+                    'x': int(coord.get('x')),
+                    'y': int(coord.get('y')),
+                    'z': int(coord.get('z') or 0),
+                    'text': coord.get('text'),
+                }
+            except (TypeError, ValueError):
+                continue
+            if in_alliance_area(coord):
+                alerts.append(_intake_alert_payload(row, coord))
+    return alerts
+
+
 def _network_issue_payload(station):
     issue_type = 'isolated'
     title = 'Алстанция вне общей сети'
@@ -1011,38 +1046,15 @@ def api_intake_alerts():
         return jsonify({'error': 'Unauthorized'}), 401
     db = get_db()
     ensure_alliance_schema(db)
-    rows = db.execute(
-        '''SELECT i.*, p.nick AS player_nick, ap.nick AS assignee_nick
-           FROM intake_items i
-           LEFT JOIN players p ON p.id = i.source_player_id
-           LEFT JOIN players ap ON ap.id = i.auto_assignee_id
-           WHERE i.status NOT IN ('Обработано', 'Отклонено')
-           ORDER BY
-             CASE i.priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END,
-             i.created_at DESC
-           LIMIT 300'''
-    ).fetchall()
-    alerts = []
-    for row in rows:
-        try:
-            analysis = json.loads(row['analysis_json'] or '{}')
-        except json.JSONDecodeError:
-            analysis = {}
-        coordinates = analysis.get('coordinates') or extract_coordinates(row['raw_text'] or '')
-        for coord in coordinates:
-            try:
-                coord = {
-                    'x': int(coord.get('x')),
-                    'y': int(coord.get('y')),
-                    'z': int(coord.get('z') or 0),
-                    'text': coord.get('text'),
-                }
-            except (TypeError, ValueError):
-                continue
-            if in_alliance_area(coord):
-                alerts.append(_intake_alert_payload(row, coord))
+    alerts = _intake_alerts(db)
     db.close()
-    return jsonify({'alerts': alerts})
+    return jsonify({
+        'alerts': alerts,
+        'summary': {
+            'total': len(alerts),
+            'urgent': sum(1 for item in alerts if item.get('priority') in ('Критический', 'Высокий')),
+        },
+    })
 
 
 @map_bp.route('/map/api/optimize')

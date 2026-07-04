@@ -189,6 +189,7 @@ def list_items():
     db = get_db()
     ensure_alliance_schema(db)
     status = request.args.get('status', '')
+    view = request.args.get('view', '')
     q = '''SELECT i.*, p.nick as player_nick, ap.nick as auto_assignee_nick
            FROM intake_items i
            LEFT JOIN players p ON p.id = i.source_player_id
@@ -198,6 +199,14 @@ def list_items():
     if status:
         q += ' AND i.status = ?'
         params.append(status)
+    if view == 'map':
+        q += " AND (i.map_alert = 1 OR i.raw_text LIKE '%:%:%')"
+    elif view == 'overdue':
+        q += " AND i.due_at IS NOT NULL AND i.due_at < strftime('%Y-%m-%d %H:%M', 'now', 'localtime') AND i.status NOT IN ('Обработано', 'Отклонено')"
+    elif view == 'unassigned':
+        q += " AND i.auto_assignee_id IS NULL AND i.status NOT IN ('Обработано', 'Отклонено')"
+    elif view == 'urgent':
+        q += " AND i.priority IN ('Критический', 'Высокий') AND i.status NOT IN ('Обработано', 'Отклонено')"
     q += " ORDER BY CASE i.status WHEN 'Новое' THEN 0 WHEN 'Разобрано' THEN 1 WHEN 'Требует подтверждения' THEN 2 WHEN 'В работе' THEN 3 ELSE 4 END, i.created_at DESC"
     items = db.execute(q, params).fetchall()
     stats = {
@@ -205,6 +214,10 @@ def list_items():
         'new': db.execute("SELECT COUNT(*) FROM intake_items WHERE status = 'Новое'").fetchone()[0],
         'parsed': db.execute("SELECT COUNT(*) FROM intake_items WHERE status IN ('Разобрано', 'Требует подтверждения')").fetchone()[0],
         'done': db.execute("SELECT COUNT(*) FROM intake_items WHERE status = 'Обработано'").fetchone()[0],
+        'map': db.execute("SELECT COUNT(*) FROM intake_items WHERE status NOT IN ('Обработано', 'Отклонено') AND (map_alert = 1 OR raw_text LIKE '%:%:%')").fetchone()[0],
+        'overdue': db.execute("SELECT COUNT(*) FROM intake_items WHERE due_at IS NOT NULL AND due_at < strftime('%Y-%m-%d %H:%M', 'now', 'localtime') AND status NOT IN ('Обработано', 'Отклонено')").fetchone()[0],
+        'unassigned': db.execute("SELECT COUNT(*) FROM intake_items WHERE auto_assignee_id IS NULL AND status NOT IN ('Обработано', 'Отклонено')").fetchone()[0],
+        'urgent': db.execute("SELECT COUNT(*) FROM intake_items WHERE priority IN ('Критический', 'Высокий') AND status NOT IN ('Обработано', 'Отклонено')").fetchone()[0],
     }
     players = _players(db)
     db.close()
@@ -216,6 +229,7 @@ def list_items():
         statuses=INBOX_STATUSES,
         source_types=SOURCE_TYPES,
         current_status=status,
+        current_view=view,
         now_ts=datetime.now().strftime('%Y-%m-%d %H:%M'),
     )
 

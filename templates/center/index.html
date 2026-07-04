@@ -101,6 +101,18 @@
             </div>
             <div class="col-md-4">
                 <div class="small text-muted fw-bold text-uppercase mb-2">Карта и координаты</div>
+                {% if map_intake_alerts %}
+                <div class="mb-2 pb-2 border-bottom border-secondary">
+                    <div class="small text-muted mb-1">Входящие на карте</div>
+                    {% for alert in map_intake_alerts[:3] %}
+                    <div class="mb-1">
+                        <a href="{{ alert.url }}" class="link-accent fw-semibold">{{ alert.title }}</a>
+                        <br><a href="{{ url_for('map.index') }}?focus={{ alert.coordinates }}" class="small link-accent"><code>{{ alert.coordinates }}</code></a>
+                        <small class="text-muted"> · {{ alert.priority or '-' }}{% if alert.player_nick %} · {{ alert.player_nick }}{% endif %}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
                 {% for t in map_tasks[:5] %}
                 <div class="mb-2">
                     <a href="{{ url_for('tasks.detail', task_id=t['id']) }}" class="link-accent fw-semibold">{{ t['title'] }}</a>
