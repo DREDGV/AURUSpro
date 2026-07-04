@@ -1,8 +1,10 @@
+import json
 import re
 
 from flask import Blueprint, render_template, session, redirect, url_for, jsonify, request
 from utils.db import get_db
 from utils.schema import ensure_alliance_schema
+from utils.intake_engine import extract_coordinates
 from utils.map_engine import (
     ALLIANCE_CENTER_X,
     ALLIANCE_CENTER_Y,
@@ -308,6 +310,30 @@ def _task_payload(row):
             'wy': world_y(coords['y']),
         })
     return payload
+
+
+def _intake_alert_payload(row, coord):
+    return {
+        'id': row['id'],
+        'title': row['summary'] or row['category'] or 'Входящее',
+        'category': row['category'],
+        'priority': row['priority'],
+        'status': row['status'],
+        'source_type': row['source_type'],
+        'player_nick': row['player_nick'],
+        'assignee_nick': row['assignee_nick'],
+        'due_at': row['due_at'],
+        'map_alert': row['map_alert'],
+        'created_task_id': row['created_task_id'],
+        'raw_text': row['raw_text'],
+        'coordinates': coord.get('text') or '[%s:%s:%s]' % (coord.get('x'), coord.get('y'), coord.get('z', 0)),
+        'x': coord.get('x'),
+        'y': coord.get('y'),
+        'z': coord.get('z', 0),
+        'wx': world_x(coord.get('x')),
+        'wy': world_y(coord.get('y')),
+        'url': url_for('inbox.detail', item_id=row['id']),
+    }
 
 
 def _network_issue_payload(station):
@@ -977,6 +1003,46 @@ def api_network_issues():
             'isolated': sum(1 for item in issues if item['issue_type'] == 'isolated'),
         }
     })
+
+
+@map_bp.route('/map/api/intake-alerts')
+def api_intake_alerts():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    db = get_db()
+    ensure_alliance_schema(db)
+    rows = db.execute(
+        '''SELECT i.*, p.nick AS player_nick, ap.nick AS assignee_nick
+           FROM intake_items i
+           LEFT JOIN players p ON p.id = i.source_player_id
+           LEFT JOIN players ap ON ap.id = i.auto_assignee_id
+           WHERE i.status NOT IN ('Обработано', 'Отклонено')
+           ORDER BY
+             CASE i.priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END,
+             i.created_at DESC
+           LIMIT 300'''
+    ).fetchall()
+    alerts = []
+    for row in rows:
+        try:
+            analysis = json.loads(row['analysis_json'] or '{}')
+        except json.JSONDecodeError:
+            analysis = {}
+        coordinates = analysis.get('coordinates') or extract_coordinates(row['raw_text'] or '')
+        for coord in coordinates:
+            try:
+                coord = {
+                    'x': int(coord.get('x')),
+                    'y': int(coord.get('y')),
+                    'z': int(coord.get('z') or 0),
+                    'text': coord.get('text'),
+                }
+            except (TypeError, ValueError):
+                continue
+            if in_alliance_area(coord):
+                alerts.append(_intake_alert_payload(row, coord))
+    db.close()
+    return jsonify({'alerts': alerts})
 
 
 @map_bp.route('/map/api/optimize')

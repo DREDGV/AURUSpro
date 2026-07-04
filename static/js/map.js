@@ -4,6 +4,7 @@ class GameMap {
     this.ctx = canvas.getContext("2d");
     this.objects = [];
     this.mapTasks = [];
+    this.intakeAlerts = [];
     this.networkIssues = [];
     this.meta = {};
     this.area = {
@@ -90,6 +91,7 @@ class GameMap {
       "filter-luna": true,
       "filter-vrata": true,
       "filter-tasks": true,
+      "filter-intake-alerts": true,
       "filter-grid": true,
       "filter-coverage": true,
     };
@@ -395,6 +397,19 @@ class GameMap {
     }
   }
 
+  async loadIntakeAlerts(shouldRender = true) {
+    try {
+      const resp = await fetch("/map/api/intake-alerts");
+      const data = await resp.json();
+      this.intakeAlerts = data.alerts || [];
+      this._updateAllianceOpsPanel();
+      if (shouldRender) this.render();
+    } catch (e) {
+      console.error("Intake alerts error:", e);
+      this.intakeAlerts = [];
+    }
+  }
+
   async loadNetworkIssues(shouldRender = true) {
     try {
       const resp = await fetch("/map/api/network-issues");
@@ -417,7 +432,11 @@ class GameMap {
       this.meta = data.meta || {};
       this._refreshExistingNetworkStatus();
       if (this.meta.area) this.area = this.meta.area;
-      await Promise.all([this.loadMapTasks(false), this.loadNetworkIssues(false)]);
+      await Promise.all([
+        this.loadMapTasks(false),
+        this.loadIntakeAlerts(false),
+        this.loadNetworkIssues(false),
+      ]);
       this._updateStatus();
 
       const params = new URLSearchParams(window.location.search);
@@ -456,6 +475,7 @@ class GameMap {
     this.drawSystems();
     this.drawObjects();
     this.drawMapTasks();
+    this.drawIntakeAlerts();
     this.drawUncoveredPoints();
     this.drawPlanSuggestions();
     this.drawEvaluatedPoint();
@@ -2641,6 +2661,45 @@ class GameMap {
     }
   }
 
+  drawIntakeAlerts() {
+    if (!this.filters["filter-intake-alerts"] || !this.intakeAlerts.length) return;
+    const c = this.ctx;
+    for (const alert of this.intakeAlerts) {
+      if (typeof alert.wx !== "number" || typeof alert.wy !== "number") continue;
+      const sp = this.worldToScreen(alert.wx, alert.wy);
+      if (
+        sp.x < -28 ||
+        sp.x > this.canvas.width + 28 ||
+        sp.y < -28 ||
+        sp.y > this.canvas.height + 28
+      )
+        continue;
+      const urgent = alert.priority === "Критический" || alert.priority === "Высокий";
+      const color = urgent ? "#ff5252" : "#fd79a8";
+      c.save();
+      c.fillStyle = urgent ? "rgba(255,82,82,0.22)" : "rgba(253,121,168,0.16)";
+      c.strokeStyle = color;
+      c.lineWidth = urgent ? 3 : 2;
+      c.beginPath();
+      c.arc(sp.x, sp.y, urgent ? 13 : 10, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+      c.fillStyle = color;
+      c.beginPath();
+      c.arc(sp.x, sp.y, 3.5, 0, Math.PI * 2);
+      c.fill();
+      if (this.scale > 0.025) {
+        c.font = "10px sans-serif";
+        c.textAlign = "center";
+        c.textBaseline = "alphabetic";
+        c.fillStyle = "rgba(255,255,255,0.84)";
+        const label = alert.player_nick || alert.category || "Входящее";
+        c.fillText(label.length > 18 ? label.slice(0, 17) + "…" : label, sp.x, sp.y - 16);
+      }
+      c.restore();
+    }
+  }
+
   _drawStar(cx, cy, spikes, outer, inner) {
     const c = this.ctx;
     let rot = -Math.PI / 2,
@@ -2743,6 +2802,22 @@ class GameMap {
     return best;
   }
 
+  findIntakeAlertAt(sx, sy) {
+    if (!this.filters["filter-intake-alerts"]) return null;
+    let best = null,
+      bestDist = 18;
+    for (const alert of this.intakeAlerts) {
+      if (typeof alert.wx !== "number" || typeof alert.wy !== "number") continue;
+      const sp = this.worldToScreen(alert.wx, alert.wy);
+      const d = Math.hypot(sp.x - sx, sp.y - sy);
+      if (d < bestDist) {
+        bestDist = d;
+        best = alert;
+      }
+    }
+    return best;
+  }
+
   showTooltip(obj, sx, sy) {
     if (!this.tooltip) return;
     let html = `<div class="tooltip-title">${obj.name || obj.nick || "Объект"}</div>`;
@@ -2792,6 +2867,30 @@ class GameMap {
       html += `<div style="margin-top:4px;color:#b2bec3;">${this._escapeHtml(task.comment)}</div>`;
     if (task.url)
       html += `<div><a href="${task.url}" style="color:#6c5ce7;">Открыть →</a></div>`;
+    this.tooltip.innerHTML = html;
+    this.tooltip.style.display = "block";
+    this.tooltip.style.left = sx + 15 + "px";
+    this.tooltip.style.top = sy - 10 + "px";
+  }
+
+  showIntakeAlertTooltip(alert, sx, sy) {
+    if (!this.tooltip) return;
+    let html = `<div class="tooltip-title">${this._escapeHtml(alert.title || "Входящее")}</div>`;
+    html += `<div style="margin-top:4px;font-size:11px;">Координаты: ${alert.x}:${alert.y}:${alert.z || 0}</div>`;
+    if (alert.priority || alert.status)
+      html += `<div>${this._escapeHtml(alert.priority || "-")} · ${this._escapeHtml(alert.status || "-")}</div>`;
+    if (alert.player_nick)
+      html += `<div>От игрока: ${this._escapeHtml(alert.player_nick)}</div>`;
+    if (alert.assignee_nick)
+      html += `<div>Исполнитель: ${this._escapeHtml(alert.assignee_nick)}</div>`;
+    if (alert.due_at)
+      html += `<div>Срок: ${this._escapeHtml(alert.due_at)}</div>`;
+    if (alert.created_task_id)
+      html += `<div>Связана задача #${alert.created_task_id}</div>`;
+    if (alert.raw_text)
+      html += `<div style="margin-top:4px;color:#b2bec3;">${this._escapeHtml(alert.raw_text).slice(0, 180)}</div>`;
+    if (alert.url)
+      html += `<div><a href="${alert.url}" style="color:#6c5ce7;">Открыть входящее →</a></div>`;
     this.tooltip.innerHTML = html;
     this.tooltip.style.display = "block";
     this.tooltip.style.left = sx + 15 + "px";
@@ -3113,10 +3212,15 @@ class GameMap {
     const coordHit = this.findCoordHitAt(mx, my);
     const obj = this.findObjectAt(mx, my);
     const taskObj = this.findTaskAt(mx, my);
+    const intakeAlert = this.findIntakeAlertAt(mx, my);
     const suggestionObj = this.findSuggestionAt(mx, my);
     if (coordHit) {
       this.highlightedObj = null;
       this.hideTooltip();
+      this.canvas.style.cursor = "pointer";
+    } else if (intakeAlert) {
+      this.highlightedObj = null;
+      this.showIntakeAlertTooltip(intakeAlert, mx, my);
       this.canvas.style.cursor = "pointer";
     } else if (taskObj) {
       this.highlightedObj = null;
@@ -4373,6 +4477,7 @@ class GameMap {
     const planObj = this.findPlanStationAt(mx, my);
     const suggestionObj = this.findSuggestionAt(mx, my);
     const taskObj = this.findTaskAt(mx, my);
+    const intakeAlert = this.findIntakeAlertAt(mx, my);
     const point = this._systemPointFromScreen(mx, my);
     this._contextPos = {
       sx: point.sx,
@@ -4383,6 +4488,7 @@ class GameMap {
       planObj: planObj,
       suggestionObj: suggestionObj,
       taskObj: taskObj,
+      intakeAlert: intakeAlert,
     };
 
     const menu = document.getElementById("map-context-menu");
@@ -4414,6 +4520,11 @@ class GameMap {
     if (taskObj) {
       html +=
         '<div class="ctx-item" data-action="open_task"><i class="bi bi-list-check"></i> Открыть задачу</div>';
+      html += '<div class="ctx-divider"></div>';
+    }
+    if (intakeAlert) {
+      html +=
+        '<div class="ctx-item" data-action="open_intake"><i class="bi bi-inbox"></i> Открыть входящее</div>';
       html += '<div class="ctx-divider"></div>';
     }
     if (this.pendingMoveObj) {
@@ -4593,6 +4704,13 @@ class GameMap {
     this.hideContextMenu();
     if (this._contextPos && this._contextPos.taskObj && this._contextPos.taskObj.url) {
       window.location.href = this._contextPos.taskObj.url;
+    }
+  }
+
+  _ctx_open_intake() {
+    this.hideContextMenu();
+    if (this._contextPos && this._contextPos.intakeAlert && this._contextPos.intakeAlert.url) {
+      window.location.href = this._contextPos.intakeAlert.url;
     }
   }
 
@@ -5009,16 +5127,42 @@ class GameMap {
           )
           .join("")
       : '<div class="text-muted small">Задач с координатами нет</div>';
+    const intakeHtml = this.intakeAlerts.length
+      ? this.intakeAlerts
+          .slice(0, 5)
+          .map(
+            (alert) =>
+              '<div class="map-ops-row" data-kind="intake" data-id="' +
+              alert.id +
+              '" data-x="' +
+              alert.x +
+              '" data-y="' +
+              alert.y +
+              '">' +
+              '<span class="text-danger"><i class="bi bi-inbox"></i></span> ' +
+              this._escapeHtml(alert.title || "Входящее") +
+              '<br><small class="text-muted">' +
+              this._escapeHtml(alert.priority || "") +
+              (alert.player_nick ? " · " + this._escapeHtml(alert.player_nick) : "") +
+              (alert.due_at ? " · до " + this._escapeHtml(alert.due_at) : "") +
+              "</small></div>",
+          )
+          .join("")
+      : '<div class="text-muted small">Входящих с координатами нет</div>';
     el.innerHTML =
       '<div class="d-flex justify-content-between small mb-1"><strong>Штаб карты</strong><span>' +
       this.networkIssues.length +
       " / " +
       this.mapTasks.length +
+      " / " +
+      this.intakeAlerts.length +
       "</span></div>" +
       '<div class="small text-muted mb-1">Проблемы сети</div>' +
       issueHtml +
       '<div class="small text-muted mt-2 mb-1">Задачи</div>' +
-      taskHtml;
+      taskHtml +
+      '<div class="small text-muted mt-2 mb-1">Входящие</div>' +
+      intakeHtml;
 
     el.querySelectorAll(".map-ops-row").forEach((row) => {
       row.addEventListener("click", () => {
@@ -5030,6 +5174,10 @@ class GameMap {
         if (row.dataset.kind === "task" && row.dataset.id) {
           const task = this.mapTasks.find((item) => String(item.id) === row.dataset.id);
           this.highlightedTask = task || null;
+        }
+        if (row.dataset.kind === "intake" && row.dataset.id) {
+          const alert = this.intakeAlerts.find((item) => String(item.id) === row.dataset.id);
+          if (alert && alert.url) window.location.href = alert.url;
         }
       });
     });
