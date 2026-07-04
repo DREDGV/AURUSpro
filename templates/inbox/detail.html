@@ -64,6 +64,11 @@
             <div class="panel-body">
                 <div class="mb-2"><strong>Сводка:</strong> {{ item['summary'] or '-' }}</div>
                 <div class="mb-2">
+                    <strong>Маршрут:</strong>
+                    {{ analysis.routing.direction if analysis.routing else '-' }}
+                    {% if analysis.routing and analysis.routing.task_type %} · {{ analysis.routing.task_type }}{% endif %}
+                </div>
+                <div class="mb-2">
                     <strong>Игроки:</strong>
                     {% for p in detected_players %}
                     <a class="link-accent" href="{{ url_for('players.card', player_id=p.id) }}">{{ p.nick }}</a>{% if not loop.last %}, {% endif %}
@@ -206,6 +211,9 @@
                                 {% if proposal.coordinates %} · {{ proposal.coordinates }}{% endif %}
                                 {% if proposal.direction %} · {{ proposal.direction }}{% endif %}
                             </small>
+                            {% if proposal.route_reason %}
+                            <div class="small text-muted mt-1">{{ proposal.route_reason }}</div>
+                            {% endif %}
                         </div>
                         <form method="POST" action="{{ url_for('inbox.apply_action', item_id=item['id']) }}">
                             <input type="hidden" name="proposal_idx" value="{{ loop.index0 }}">
