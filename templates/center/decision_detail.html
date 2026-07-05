@@ -38,6 +38,22 @@
                         <small class="text-muted">Создано:</small> {{ decision['created_at'] or '—' }}
                     </div>
                 </div>
+                {% if decision['coordinates'] or decision['source_intake_id'] %}
+                <div class="row mt-2">
+                    <div class="col-md-6">
+                        <small class="text-muted">Координаты:</small>
+                        {% if decision['coordinates'] %}
+                        <a class="link-accent" href="{{ url_for('map.index') }}?focus={{ decision['coordinates'] }}"><code>{{ decision['coordinates'] }}</code></a>
+                        {% else %}—{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <small class="text-muted">Источник:</small>
+                        {% if decision['source_intake_id'] %}
+                        <a class="link-accent" href="{{ url_for('inbox.detail', item_id=decision['source_intake_id']) }}">входящее #{{ decision['source_intake_id'] }}</a>
+                        {% else %}—{% endif %}
+                    </div>
+                </div>
+                {% endif %}
                 {% if decision['result'] %}
                 <hr>
                 <div class="p-3 rounded" style="background:rgba(40,167,69,0.1); border-left:3px solid var(--success);">
@@ -95,6 +111,10 @@
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Срок</label>
                         <input type="text" name="deadline" class="form-control" value="{{ decision['deadline'] or '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Координаты</label>
+                        <input type="text" name="coordinates" class="form-control" value="{{ decision['coordinates'] or '' }}" placeholder="[2500:2500:0]">
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Результат</label>

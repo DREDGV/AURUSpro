@@ -5,6 +5,7 @@ class GameMap {
     this.objects = [];
     this.mapTasks = [];
     this.intakeAlerts = [];
+    this.workMarkers = [];
     this.networkIssues = [];
     this.meta = {};
     this.area = {
@@ -92,6 +93,7 @@ class GameMap {
       "filter-vrata": true,
       "filter-tasks": true,
       "filter-intake-alerts": true,
+      "filter-work-markers": true,
       "filter-grid": true,
       "filter-coverage": true,
     };
@@ -410,6 +412,19 @@ class GameMap {
     }
   }
 
+  async loadWorkMarkers(shouldRender = true) {
+    try {
+      const resp = await fetch("/map/api/work-markers");
+      const data = await resp.json();
+      this.workMarkers = data.markers || [];
+      this._updateAllianceOpsPanel();
+      if (shouldRender) this.render();
+    } catch (e) {
+      console.error("Work markers error:", e);
+      this.workMarkers = [];
+    }
+  }
+
   async loadNetworkIssues(shouldRender = true) {
     try {
       const resp = await fetch("/map/api/network-issues");
@@ -435,6 +450,7 @@ class GameMap {
       await Promise.all([
         this.loadMapTasks(false),
         this.loadIntakeAlerts(false),
+        this.loadWorkMarkers(false),
         this.loadNetworkIssues(false),
       ]);
       this._updateStatus();
@@ -476,6 +492,7 @@ class GameMap {
     this.drawObjects();
     this.drawMapTasks();
     this.drawIntakeAlerts();
+    this.drawWorkMarkers();
     this.drawUncoveredPoints();
     this.drawPlanSuggestions();
     this.drawEvaluatedPoint();
@@ -2700,6 +2717,50 @@ class GameMap {
     }
   }
 
+  drawWorkMarkers() {
+    if (!this.filters["filter-work-markers"] || !this.workMarkers.length) return;
+    const c = this.ctx;
+    const styles = {
+      request: { color: "#f1c40f", label: "?" },
+      decision: { color: "#9b59b6", label: "D" },
+      log: { color: "#2ecc71", label: "J" },
+    };
+    for (const marker of this.workMarkers) {
+      if (typeof marker.wx !== "number" || typeof marker.wy !== "number") continue;
+      const sp = this.worldToScreen(marker.wx, marker.wy);
+      if (
+        sp.x < -26 ||
+        sp.x > this.canvas.width + 26 ||
+        sp.y < -26 ||
+        sp.y > this.canvas.height + 26
+      )
+        continue;
+      const style = styles[marker.kind] || styles.log;
+      const urgent = marker.priority === "Критический" || marker.priority === "Высокий";
+      c.save();
+      c.fillStyle = "rgba(10,14,20,0.82)";
+      c.strokeStyle = style.color;
+      c.lineWidth = urgent ? 3 : 2;
+      c.beginPath();
+      c.arc(sp.x, sp.y, urgent ? 9 : 7, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+      c.fillStyle = style.color;
+      c.font = "bold 9px sans-serif";
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.fillText(style.label, sp.x, sp.y + 0.5);
+      if (this.scale > 0.04) {
+        c.textBaseline = "alphabetic";
+        c.font = "10px sans-serif";
+        c.fillStyle = "rgba(255,255,255,0.78)";
+        const label = marker.player_nick || marker.title || "Штаб";
+        c.fillText(label.length > 18 ? label.slice(0, 17) + "…" : label, sp.x, sp.y + 22);
+      }
+      c.restore();
+    }
+  }
+
   _drawStar(cx, cy, spikes, outer, inner) {
     const c = this.ctx;
     let rot = -Math.PI / 2,
@@ -2818,6 +2879,22 @@ class GameMap {
     return best;
   }
 
+  findWorkMarkerAt(sx, sy) {
+    if (!this.filters["filter-work-markers"]) return null;
+    let best = null,
+      bestDist = 15;
+    for (const marker of this.workMarkers) {
+      if (typeof marker.wx !== "number" || typeof marker.wy !== "number") continue;
+      const sp = this.worldToScreen(marker.wx, marker.wy);
+      const d = Math.hypot(sp.x - sx, sp.y - sy);
+      if (d < bestDist) {
+        bestDist = d;
+        best = marker;
+      }
+    }
+    return best;
+  }
+
   showTooltip(obj, sx, sy) {
     if (!this.tooltip) return;
     let html = `<div class="tooltip-title">${obj.name || obj.nick || "Объект"}</div>`;
@@ -2891,6 +2968,34 @@ class GameMap {
       html += `<div style="margin-top:4px;color:#b2bec3;">${this._escapeHtml(alert.raw_text).slice(0, 180)}</div>`;
     if (alert.url)
       html += `<div><a href="${alert.url}" style="color:#6c5ce7;">Открыть входящее →</a></div>`;
+    this.tooltip.innerHTML = html;
+    this.tooltip.style.display = "block";
+    this.tooltip.style.left = sx + 15 + "px";
+    this.tooltip.style.top = sy - 10 + "px";
+  }
+
+  showWorkMarkerTooltip(marker, sx, sy) {
+    if (!this.tooltip) return;
+    const kindLabel =
+      marker.kind === "request"
+        ? "Заявка"
+        : marker.kind === "decision"
+          ? "Решение"
+          : "Журнал";
+    let html = `<div class="tooltip-title">${kindLabel}: ${this._escapeHtml(marker.title || "Запись штаба")}</div>`;
+    html += `<div style="margin-top:4px;font-size:11px;">Координаты: ${marker.x}:${marker.y}:${marker.z || 0}</div>`;
+    if (marker.priority || marker.status)
+      html += `<div>${this._escapeHtml(marker.priority || "-")} · ${this._escapeHtml(marker.status || "-")}</div>`;
+    if (marker.player_nick)
+      html += `<div>Игрок: ${this._escapeHtml(marker.player_nick)}</div>`;
+    if (marker.assignee)
+      html += `<div>Ответственный: ${this._escapeHtml(marker.assignee)}</div>`;
+    if (marker.source_intake_id)
+      html += `<div>Источник: входящее #${marker.source_intake_id}</div>`;
+    if (marker.description)
+      html += `<div style="margin-top:4px;color:#b2bec3;">${this._escapeHtml(marker.description).slice(0, 180)}</div>`;
+    if (marker.url)
+      html += `<div><a href="${marker.url}" style="color:#6c5ce7;">Открыть →</a></div>`;
     this.tooltip.innerHTML = html;
     this.tooltip.style.display = "block";
     this.tooltip.style.left = sx + 15 + "px";
@@ -3213,6 +3318,7 @@ class GameMap {
     const obj = this.findObjectAt(mx, my);
     const taskObj = this.findTaskAt(mx, my);
     const intakeAlert = this.findIntakeAlertAt(mx, my);
+    const workMarker = this.findWorkMarkerAt(mx, my);
     const suggestionObj = this.findSuggestionAt(mx, my);
     if (coordHit) {
       this.highlightedObj = null;
@@ -3221,6 +3327,10 @@ class GameMap {
     } else if (intakeAlert) {
       this.highlightedObj = null;
       this.showIntakeAlertTooltip(intakeAlert, mx, my);
+      this.canvas.style.cursor = "pointer";
+    } else if (workMarker) {
+      this.highlightedObj = null;
+      this.showWorkMarkerTooltip(workMarker, mx, my);
       this.canvas.style.cursor = "pointer";
     } else if (taskObj) {
       this.highlightedObj = null;
@@ -4478,6 +4588,7 @@ class GameMap {
     const suggestionObj = this.findSuggestionAt(mx, my);
     const taskObj = this.findTaskAt(mx, my);
     const intakeAlert = this.findIntakeAlertAt(mx, my);
+    const workMarker = this.findWorkMarkerAt(mx, my);
     const point = this._systemPointFromScreen(mx, my);
     this._contextPos = {
       sx: point.sx,
@@ -4489,6 +4600,7 @@ class GameMap {
       suggestionObj: suggestionObj,
       taskObj: taskObj,
       intakeAlert: intakeAlert,
+      workMarker: workMarker,
     };
 
     const menu = document.getElementById("map-context-menu");
@@ -4525,6 +4637,11 @@ class GameMap {
     if (intakeAlert) {
       html +=
         '<div class="ctx-item" data-action="open_intake"><i class="bi bi-inbox"></i> Открыть входящее</div>';
+      html += '<div class="ctx-divider"></div>';
+    }
+    if (workMarker) {
+      html +=
+        '<div class="ctx-item" data-action="open_work_marker"><i class="bi bi-diagram-3"></i> Открыть запись штаба</div>';
       html += '<div class="ctx-divider"></div>';
     }
     if (this.pendingMoveObj) {
@@ -4711,6 +4828,13 @@ class GameMap {
     this.hideContextMenu();
     if (this._contextPos && this._contextPos.intakeAlert && this._contextPos.intakeAlert.url) {
       window.location.href = this._contextPos.intakeAlert.url;
+    }
+  }
+
+  _ctx_open_work_marker() {
+    this.hideContextMenu();
+    if (this._contextPos && this._contextPos.workMarker && this._contextPos.workMarker.url) {
+      window.location.href = this._contextPos.workMarker.url;
     }
   }
 
@@ -5149,6 +5273,47 @@ class GameMap {
           )
           .join("")
       : '<div class="text-muted small">Входящих с координатами нет</div>';
+    const workHtml = this.workMarkers.length
+      ? this.workMarkers
+          .slice(0, 5)
+          .map((marker) => {
+            const icon =
+              marker.kind === "request"
+                ? "bi-life-preserver"
+                : marker.kind === "decision"
+                  ? "bi-signpost-split"
+                  : "bi-journal-text";
+            const color =
+              marker.kind === "request"
+                ? "text-warning"
+                : marker.kind === "decision"
+                  ? "text-primary"
+                  : "text-success";
+            return (
+              '<div class="map-ops-row" data-kind="work" data-id="' +
+              marker.id +
+              '" data-work-kind="' +
+              this._escapeHtml(marker.kind || "") +
+              '" data-x="' +
+              marker.x +
+              '" data-y="' +
+              marker.y +
+              '">' +
+              '<span class="' +
+              color +
+              '"><i class="bi ' +
+              icon +
+              '"></i></span> ' +
+              this._escapeHtml(marker.title || "Запись штаба") +
+              '<br><small class="text-muted">' +
+              this._escapeHtml(marker.status || marker.kind || "") +
+              (marker.priority ? " · " + this._escapeHtml(marker.priority) : "") +
+              (marker.player_nick ? " · " + this._escapeHtml(marker.player_nick) : "") +
+              "</small></div>"
+            );
+          })
+          .join("")
+      : '<div class="text-muted small">Рабочих записей с координатами нет</div>';
     el.innerHTML =
       '<div class="d-flex justify-content-between small mb-1"><strong>Штаб карты</strong><span>' +
       this.networkIssues.length +
@@ -5156,13 +5321,17 @@ class GameMap {
       this.mapTasks.length +
       " / " +
       this.intakeAlerts.length +
+      " / " +
+      this.workMarkers.length +
       "</span></div>" +
       '<div class="small text-muted mb-1">Проблемы сети</div>' +
       issueHtml +
       '<div class="small text-muted mt-2 mb-1">Задачи</div>' +
       taskHtml +
       '<div class="small text-muted mt-2 mb-1">Входящие</div>' +
-      intakeHtml;
+      intakeHtml +
+      '<div class="small text-muted mt-2 mb-1">Заявки / решения / журнал</div>' +
+      workHtml;
 
     el.querySelectorAll(".map-ops-row").forEach((row) => {
       row.addEventListener("click", () => {
@@ -5178,6 +5347,14 @@ class GameMap {
         if (row.dataset.kind === "intake" && row.dataset.id) {
           const alert = this.intakeAlerts.find((item) => String(item.id) === row.dataset.id);
           if (alert && alert.url) window.location.href = alert.url;
+        }
+        if (row.dataset.kind === "work" && row.dataset.id) {
+          const marker = this.workMarkers.find(
+            (item) =>
+              String(item.id) === row.dataset.id &&
+              String(item.kind || "") === String(row.dataset.workKind || ""),
+          );
+          if (marker && marker.url) window.location.href = marker.url;
         }
       });
     });

@@ -30,6 +30,7 @@
                         <strong>{{ e['title'] }}</strong>
                         {% if e['description'] %}<br><small class="text-muted">{{ e['description'][:120] }}{% if e['description']|length > 120 %}...{% endif %}</small>{% endif %}
                         {% if e['related_player'] %}<br><small class="text-muted">Игрок: {{ e['related_player'] }}</small>{% endif %}
+                        {% if e['coordinates'] %}<br><a class="small link-accent" href="{{ url_for('map.index') }}?focus={{ e['coordinates'] }}"><code>{{ e['coordinates'] }}</code></a>{% endif %}
                     </td>
                     <td><small>{{ e['author'] or '—' }}</small></td>
                 </tr>

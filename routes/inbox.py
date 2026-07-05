@@ -182,6 +182,27 @@ def _first_detected_player_id(analysis):
     return None
 
 
+def _first_coordinate_text(item, proposal=None):
+    proposal = proposal or {}
+    if proposal.get('coordinates'):
+        return proposal.get('coordinates')
+    analysis = _load_analysis(item)
+    for coord in analysis.get('coordinates') or []:
+        if coord.get('text'):
+            return coord.get('text')
+        if coord.get('x') is not None and coord.get('y') is not None:
+            return '[%s:%s:%s]' % (coord.get('x'), coord.get('y'), coord.get('z', 0))
+    return None
+
+
+def _link_work_item(db, item_id, target_type, target_id, relation='created'):
+    db.execute(
+        '''INSERT INTO work_links (source_type, source_id, target_type, target_id, relation)
+           VALUES ('intake', ?, ?, ?, ?)''',
+        (item_id, target_type, target_id, relation),
+    )
+
+
 @inbox.route('/inbox')
 def list_items():
     if 'user_id' not in session:
@@ -403,12 +424,13 @@ def apply_action(item_id):
     created_id = None
     default_assignee_id = request.form.get('assignee_id') or proposal.get('assignee_id') or item['auto_assignee_id']
     default_deadline = request.form.get('deadline') or proposal.get('deadline') or item['due_at']
+    default_coordinates = request.form.get('coordinates') or _first_coordinate_text(item, proposal)
 
     if action == 'task':
         db.execute(
             '''INSERT INTO tasks (title, direction, description, assignee_id, priority, status,
-               deadline, coordinates, map_object_type, task_type, comment, updated_at)
-               VALUES (?, ?, ?, ?, ?, 'Новая', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''',
+               deadline, coordinates, map_object_type, task_type, comment, source_intake_id, updated_at)
+               VALUES (?, ?, ?, ?, ?, 'Новая', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''',
             (
                 request.form.get('title') or proposal.get('title') or item['summary'] or 'Задача из входящего',
                 request.form.get('direction') or proposal.get('direction') or 'Карта',
@@ -416,21 +438,24 @@ def apply_action(item_id):
                 default_assignee_id or None,
                 request.form.get('priority') or proposal.get('priority') or item['priority'] or 'Средний',
                 default_deadline,
-                request.form.get('coordinates') or proposal.get('coordinates'),
+                default_coordinates,
                 proposal.get('map_object_type'),
                 proposal.get('task_type') or 'other',
                 'Создано из входящего #%d%s' % (
                     item_id,
                     '; источник: %s' % item['player_nick'] if item['player_nick'] else '',
                 ),
+                item_id,
             ),
         )
         created_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         db.execute('UPDATE intake_items SET created_task_id=? WHERE id=?', (created_id, item_id))
+        _link_work_item(db, item_id, 'task', created_id)
     elif action == 'request':
         db.execute(
-            '''INSERT INTO requests (player_id, request_type, title, description, priority, status, assignee)
-               VALUES (?, ?, ?, ?, ?, 'Новый', ?)''',
+            '''INSERT INTO requests (player_id, request_type, title, description, priority, status, assignee,
+               coordinates, due_at, source_intake_id)
+               VALUES (?, ?, ?, ?, ?, 'Новый', ?, ?, ?, ?)''',
             (
                 request.form.get('player_id') or proposal.get('player_id') or item['source_player_id'],
                 proposal.get('request_type') or item['category'] or 'Обращение',
@@ -438,10 +463,14 @@ def apply_action(item_id):
                 request.form.get('description') or proposal.get('description') or item['raw_text'],
                 request.form.get('priority') or proposal.get('priority') or item['priority'] or 'Средний',
                 request.form.get('assignee') or proposal.get('assignee') or item['auto_assignee_nick'],
+                default_coordinates,
+                default_deadline,
+                item_id,
             ),
         )
         created_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         db.execute('UPDATE intake_items SET created_request_id=? WHERE id=?', (created_id, item_id))
+        _link_work_item(db, item_id, 'request', created_id)
     elif action == 'note':
         player_id = request.form.get('player_id') or proposal.get('player_id') or item['source_player_id']
         if not player_id:
@@ -460,20 +489,25 @@ def apply_action(item_id):
         )
         created_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         db.execute('UPDATE intake_items SET created_note_id=? WHERE id=?', (created_id, item_id))
+        _link_work_item(db, item_id, 'player_note', created_id)
     elif action == 'log':
         db.execute(
-            '''INSERT INTO alliance_log (event_type, title, description, related_player, author, event_date)
-               VALUES (?, ?, ?, ?, ?, date('now'))''',
+            '''INSERT INTO alliance_log (event_type, title, description, related_player, author, event_date,
+               coordinates, source_intake_id)
+               VALUES (?, ?, ?, ?, ?, date('now'), ?, ?)''',
             (
                 proposal.get('event_type') or 'Прочее',
                 request.form.get('title') or proposal.get('title') or item['summary'] or 'Входящее',
                 request.form.get('description') or proposal.get('description') or item['raw_text'],
                 proposal.get('related_player'),
                 session.get('username'),
+                default_coordinates,
+                item_id,
             ),
         )
         created_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         db.execute('UPDATE intake_items SET created_log_id=? WHERE id=?', (created_id, item_id))
+        _link_work_item(db, item_id, 'log', created_id)
     else:
         flash('Неизвестное действие', 'danger')
         db.close()

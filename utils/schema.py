@@ -111,9 +111,30 @@ def ensure_alliance_schema(db):
     _add_column_if_missing(db, "tasks", "map_object_id", "INTEGER")
     _add_column_if_missing(db, "tasks", "map_object_type", "TEXT")
     _add_column_if_missing(db, "tasks", "task_type", "TEXT")
+    _add_column_if_missing(db, "tasks", "source_intake_id", "INTEGER")
     _add_column_if_missing(db, "tasks", "updated_at", "TIMESTAMP")
+    _add_column_if_missing(db, "requests", "coordinates", "TEXT")
+    _add_column_if_missing(db, "requests", "due_at", "TIMESTAMP")
+    _add_column_if_missing(db, "requests", "source_intake_id", "INTEGER")
+    _add_column_if_missing(db, "decisions", "coordinates", "TEXT")
+    _add_column_if_missing(db, "decisions", "source_intake_id", "INTEGER")
+    _add_column_if_missing(db, "alliance_log", "coordinates", "TEXT")
+    _add_column_if_missing(db, "alliance_log", "source_intake_id", "INTEGER")
+    _add_column_if_missing(db, "alliance_log", "related_task_id", "INTEGER")
+    _add_column_if_missing(db, "alliance_log", "related_request_id", "INTEGER")
     _add_column_if_missing(db, "intake_items", "due_at", "TIMESTAMP")
     _add_column_if_missing(db, "intake_items", "auto_assignee_id", "INTEGER")
     _add_column_if_missing(db, "intake_items", "auto_assignee_reason", "TEXT")
     _add_column_if_missing(db, "intake_items", "map_alert", "INTEGER DEFAULT 0")
+    db.execute(
+        """CREATE TABLE IF NOT EXISTS work_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_type TEXT NOT NULL,
+            source_id INTEGER NOT NULL,
+            target_type TEXT NOT NULL,
+            target_id INTEGER NOT NULL,
+            relation TEXT DEFAULT 'created',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )"""
+    )
     db.commit()

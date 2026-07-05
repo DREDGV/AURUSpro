@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, session, redirect, url_for, request, flash, jsonify
 from utils.db import get_db
 from utils.schema import ensure_alliance_schema
-from routes.map import _existing_alstations, _network_issue_payload, _intake_alerts
+from routes.map import _existing_alstations, _network_issue_payload, _intake_alerts, _work_markers
 import json
 
 center = Blueprint('center', __name__)
@@ -104,6 +104,7 @@ def index():
         if station.get('network_status') in ('signal_only', 'isolated')
     ]
     map_intake_alerts = _intake_alerts(db, limit=50)[:6]
+    map_work_markers = _work_markers(db, limit=50)[:6]
 
     db.close()
     return render_template('center/index.html',
@@ -125,6 +126,7 @@ def index():
         open_tasks=open_tasks,
         map_tasks=map_tasks,
         map_intake_alerts=map_intake_alerts,
+        map_work_markers=map_work_markers,
         network_issues=network_issues)
 
 
@@ -133,6 +135,7 @@ def decisions():
     if 'user_id' not in session:
         return redirect(url_for('auth.login'))
     db = get_db()
+    ensure_alliance_schema(db)
     all_decisions = db.execute(
         "SELECT * FROM decisions ORDER BY "
         "CASE status WHEN 'Предложено' THEN 0 WHEN 'Согласовано' THEN 1 WHEN 'Выполнено' THEN 2 ELSE 3 END, "
@@ -147,6 +150,7 @@ def decision_detail(decision_id):
     if 'user_id' not in session:
         return redirect(url_for('auth.login'))
     db = get_db()
+    ensure_alliance_schema(db)
     decision = db.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,)).fetchone()
     if not decision:
         flash('Решение не найдено', 'danger')
@@ -166,9 +170,10 @@ def update_decision(decision_id):
         return redirect(url_for('auth.login'))
     data = {k: v for k, v in request.form.items()}
     db = get_db()
+    ensure_alliance_schema(db)
     fields = []
     values = []
-    for key in ['status', 'result', 'priority', 'deadline']:
+    for key in ['status', 'result', 'priority', 'deadline', 'coordinates']:
         if key in data:
             fields.append(f'{key} = ?')
             values.append(data[key])
@@ -187,12 +192,13 @@ def create_decision():
     if request.method == 'POST':
         data = {k: v for k, v in request.form.items()}
         db = get_db()
+        ensure_alliance_schema(db)
         db.execute(
-            '''INSERT INTO decisions (title, proposer, description, status, priority, deadline, created_by)
-               VALUES (?, ?, ?, ?, ?, ?, ?)''',
+            '''INSERT INTO decisions (title, proposer, description, status, priority, deadline, coordinates, created_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
             (data['title'], data.get('proposer'), data.get('description'),
              data.get('status', 'Предложено'), data.get('priority', 'Средний'),
-             data.get('deadline'), session.get('username'))
+             data.get('deadline'), data.get('coordinates'), session.get('username'))
         )
         db.commit()
         db.close()
@@ -235,6 +241,7 @@ def request_detail(request_id):
     if 'user_id' not in session:
         return redirect(url_for('auth.login'))
     db = get_db()
+    ensure_alliance_schema(db)
     req = db.execute(
         "SELECT r.*, p.nick as player_nick, p.id as player_db_id FROM requests r "
         "LEFT JOIN players p ON r.player_id = p.id WHERE r.id = ?", (request_id,)
@@ -257,9 +264,10 @@ def update_request(request_id):
         return redirect(url_for('auth.login'))
     data = {k: v for k, v in request.form.items()}
     db = get_db()
+    ensure_alliance_schema(db)
     fields = []
     values = []
-    for key in ['status', 'assignee', 'resolution', 'priority', 'request_type', 'description']:
+    for key in ['status', 'assignee', 'resolution', 'priority', 'request_type', 'description', 'coordinates', 'due_at']:
         if key in data:
             fields.append(f'{key} = ?')
             values.append(data[key])
@@ -305,18 +313,20 @@ def create_request():
     if request.method == 'POST':
         data = {k: v for k, v in request.form.items()}
         db = get_db()
+        ensure_alliance_schema(db)
         db.execute(
-            '''INSERT INTO requests (player_id, request_type, title, description, priority, status, assignee)
-               VALUES (?, ?, ?, ?, ?, 'Новый', ?)''',
+            '''INSERT INTO requests (player_id, request_type, title, description, priority, status, assignee, coordinates, due_at)
+               VALUES (?, ?, ?, ?, ?, 'Новый', ?, ?, ?)''',
             (data.get('player_id') or None, data.get('request_type', 'Другое'),
              data['title'], data.get('description'), data.get('priority', 'Средний'),
-             data.get('assignee'))
+             data.get('assignee'), data.get('coordinates'), data.get('due_at'))
         )
         db.commit()
         db.close()
         flash('Запрос создан', 'success')
         return redirect(url_for('center.requests_list'))
     db = get_db()
+    ensure_alliance_schema(db)
     players = db.execute("SELECT id, nick FROM players ORDER BY nick").fetchall()
     db.close()
     return render_template('center/request_form.html', players=players)
@@ -327,6 +337,7 @@ def log():
     if 'user_id' not in session:
         return redirect(url_for('auth.login'))
     db = get_db()
+    ensure_alliance_schema(db)
     all_events = db.execute(
         "SELECT * FROM alliance_log ORDER BY created_at DESC"
     ).fetchall()
@@ -341,12 +352,13 @@ def create_log():
     if request.method == 'POST':
         data = {k: v for k, v in request.form.items()}
         db = get_db()
+        ensure_alliance_schema(db)
         db.execute(
-            '''INSERT INTO alliance_log (event_type, title, description, related_player, author, event_date)
-               VALUES (?, ?, ?, ?, ?, ?)''',
+            '''INSERT INTO alliance_log (event_type, title, description, related_player, author, event_date, coordinates)
+               VALUES (?, ?, ?, ?, ?, ?, ?)''',
             (data.get('event_type', 'Прочее'), data['title'], data.get('description'),
              data.get('related_player'), data.get('author', session.get('username')),
-             data.get('event_date'))
+             data.get('event_date'), data.get('coordinates'))
         )
         db.commit()
         db.close()
@@ -405,11 +417,12 @@ def ajax_quick_log():
         return jsonify({'error': 'Auth required'}), 401
     data = request.get_json()
     db = get_db()
+    ensure_alliance_schema(db)
     db.execute(
-        '''INSERT INTO alliance_log (event_type, title, description, author, event_date)
-           VALUES (?, ?, ?, ?, date('now'))''',
+        '''INSERT INTO alliance_log (event_type, title, description, author, event_date, coordinates)
+           VALUES (?, ?, ?, ?, date('now'), ?)''',
         (data.get('event_type', 'Прочее'), data['title'], data.get('description', ''),
-         session.get('username'))
+         session.get('username'), data.get('coordinates'))
     )
     db.commit()
     db.close()

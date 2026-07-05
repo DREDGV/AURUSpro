@@ -29,9 +29,15 @@
         <label class="form-label fw-semibold">Описание</label>
         <textarea name="description" class="form-control" rows="4"></textarea>
     </div>
-    <div class="mb-3">
-        <label class="form-label fw-semibold">Автор</label>
-        <input type="text" name="author" class="form-control" placeholder="Кто фиксирует">
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Автор</label>
+            <input type="text" name="author" class="form-control" placeholder="Кто фиксирует">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Координаты</label>
+            <input type="text" name="coordinates" class="form-control" placeholder="[2500:2500:0]">
+        </div>
     </div>
     <button type="submit" class="btn" style="background:var(--accent);color:#fff;">Добавить</button>
     <a href="{{ url_for('center.log') }}" class="btn btn-secondary">Отмена</a>

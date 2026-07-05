@@ -38,9 +38,19 @@
         <label class="form-label fw-semibold">Описание</label>
         <textarea name="description" class="form-control" rows="4"></textarea>
     </div>
-    <div class="mb-3">
-        <label class="form-label fw-semibold">Ответственный</label>
-        <input type="text" name="assignee" class="form-control" placeholder="Кто будет решать">
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Ответственный</label>
+            <input type="text" name="assignee" class="form-control" placeholder="Кто будет решать">
+        </div>
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Координаты</label>
+            <input type="text" name="coordinates" class="form-control" placeholder="[2500:2500:0]">
+        </div>
+        <div class="col-md-4">
+            <label class="form-label fw-semibold">Срок реакции</label>
+            <input type="datetime-local" name="due_at" class="form-control">
+        </div>
     </div>
     <button type="submit" class="btn" style="background:var(--accent);color:#fff;">Создать</button>
     <a href="{{ url_for('center.requests_list') }}" class="btn btn-secondary">Отмена</a>

@@ -113,6 +113,18 @@
                     {% endfor %}
                 </div>
                 {% endif %}
+                {% if map_work_markers %}
+                <div class="mb-2 pb-2 border-bottom border-secondary">
+                    <div class="small text-muted mb-1">Записи штаба на карте</div>
+                    {% for marker in map_work_markers[:3] %}
+                    <div class="mb-1">
+                        <a href="{{ marker.url }}" class="link-accent fw-semibold">{{ marker.title }}</a>
+                        <br><a href="{{ url_for('map.index') }}?focus={{ marker.coordinates }}" class="small link-accent"><code>{{ marker.coordinates }}</code></a>
+                        <small class="text-muted"> · {{ marker.status or marker.kind }}{% if marker.player_nick %} · {{ marker.player_nick }}{% endif %}</small>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
                 {% for t in map_tasks[:5] %}
                 <div class="mb-2">
                     <a href="{{ url_for('tasks.detail', task_id=t['id']) }}" class="link-accent fw-semibold">{{ t['title'] }}</a>
@@ -299,6 +311,10 @@
                     <label class="form-label">Описание</label>
                     <textarea id="ql-desc" class="form-control" rows="2"></textarea>
                 </div>
+                <div class="mb-3">
+                    <label class="form-label">Координаты</label>
+                    <input type="text" id="ql-coordinates" class="form-control" placeholder="[2500:2500:0]">
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
@@ -344,7 +360,8 @@ function submitQuickLog() {
         body: JSON.stringify({
             event_type: document.getElementById('ql-type').value,
             title: title,
-            description: document.getElementById('ql-desc').value
+            description: document.getElementById('ql-desc').value,
+            coordinates: document.getElementById('ql-coordinates').value
         })
     })
     .then(function(r) { return r.json(); })

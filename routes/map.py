@@ -371,6 +371,94 @@ def _intake_alerts(db, limit=300):
     return alerts
 
 
+def _work_marker_payload(kind, row, coords):
+    urls = {
+        'request': url_for('center.request_detail', request_id=row['id']),
+        'decision': url_for('center.decision_detail', decision_id=row['id']),
+        'log': url_for('center.log'),
+    }
+    icons = {
+        'request': 'request',
+        'decision': 'decision',
+        'log': 'log',
+    }
+    return {
+        'id': row['id'],
+        'kind': kind,
+        'icon': icons.get(kind, 'log'),
+        'title': row['title'],
+        'description': row['description'] if 'description' in row.keys() else None,
+        'status': row['status'] if 'status' in row.keys() else None,
+        'priority': row['priority'] if 'priority' in row.keys() else None,
+        'player_nick': row['player_nick'] if 'player_nick' in row.keys() else None,
+        'assignee': row['assignee'] if 'assignee' in row.keys() else None,
+        'source_intake_id': row['source_intake_id'] if 'source_intake_id' in row.keys() else None,
+        'coordinates': row['coordinates'],
+        'x': coords['x'],
+        'y': coords['y'],
+        'z': coords['z'],
+        'wx': world_x(coords['x']),
+        'wy': world_y(coords['y']),
+        'url': urls.get(kind),
+    }
+
+
+def _work_markers(db, limit=300):
+    markers = []
+    request_rows = db.execute(
+        '''SELECT r.*, p.nick AS player_nick
+           FROM requests r
+           LEFT JOIN players p ON p.id = r.player_id
+           WHERE r.coordinates IS NOT NULL AND r.coordinates != ''
+             AND (r.status IS NULL OR r.status NOT IN ('Выполнен', 'Отклонён'))
+           ORDER BY
+             CASE r.priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END,
+             r.created_at DESC
+           LIMIT ?''',
+        (limit,),
+    ).fetchall()
+    for row in request_rows:
+        coords = parse_coordinates(row['coordinates'] or '')
+        if coords and is_map_ready(coords):
+            markers.append(_work_marker_payload('request', row, coords))
+
+    decision_rows = db.execute(
+        '''SELECT *
+           FROM decisions
+           WHERE coordinates IS NOT NULL AND coordinates != ''
+             AND (status IS NULL OR status NOT IN ('Выполнено', 'Отменено'))
+           ORDER BY
+             CASE priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END,
+             created_at DESC
+           LIMIT ?''',
+        (limit,),
+    ).fetchall()
+    for row in decision_rows:
+        coords = parse_coordinates(row['coordinates'] or '')
+        if coords and is_map_ready(coords):
+            markers.append(_work_marker_payload('decision', row, coords))
+
+    log_rows = db.execute(
+        '''SELECT *
+           FROM alliance_log
+           WHERE coordinates IS NOT NULL AND coordinates != ''
+           ORDER BY created_at DESC
+           LIMIT ?''',
+        (limit,),
+    ).fetchall()
+    for row in log_rows:
+        coords = parse_coordinates(row['coordinates'] or '')
+        if coords and is_map_ready(coords):
+            markers.append(_work_marker_payload('log', row, coords))
+
+    markers.sort(key=lambda item: (
+        {'request': 0, 'decision': 1, 'log': 2}.get(item['kind'], 3),
+        0 if item.get('priority') in ('Критический', 'Высокий') else 1,
+        item.get('title') or '',
+    ))
+    return markers[:limit]
+
+
 def _network_issue_payload(station):
     issue_type = 'isolated'
     title = 'Алстанция вне общей сети'
@@ -993,9 +1081,9 @@ def api_create_map_task():
     )
     task_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
     db.execute(
-        '''INSERT INTO alliance_log (event_type, title, description, author, event_date)
-           VALUES (?, ?, ?, ?, date('now'))''',
-        ('Задача', 'Создана задача с карты', '%s %s' % (title, coords), session.get('username')),
+        '''INSERT INTO alliance_log (event_type, title, description, author, event_date, coordinates, related_task_id)
+           VALUES (?, ?, ?, ?, date('now'), ?, ?)''',
+        ('Задача', 'Создана задача с карты', '%s %s' % (title, coords), session.get('username'), coords, task_id),
     )
     db.commit()
     row = db.execute(
@@ -1053,6 +1141,25 @@ def api_intake_alerts():
         'summary': {
             'total': len(alerts),
             'urgent': sum(1 for item in alerts if item.get('priority') in ('Критический', 'Высокий')),
+        },
+    })
+
+
+@map_bp.route('/map/api/work-markers')
+def api_work_markers():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    db = get_db()
+    ensure_alliance_schema(db)
+    markers = _work_markers(db)
+    db.close()
+    return jsonify({
+        'markers': markers,
+        'summary': {
+            'total': len(markers),
+            'requests': sum(1 for item in markers if item.get('kind') == 'request'),
+            'decisions': sum(1 for item in markers if item.get('kind') == 'decision'),
+            'log': sum(1 for item in markers if item.get('kind') == 'log'),
         },
     })
 
