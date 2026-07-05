@@ -680,6 +680,7 @@ def detail(item_id):
         item=item,
         analysis=_load_analysis(item),
         proposals=_load_proposals(item),
+        action_plan=_recommended_action_plan(item),
         players=players,
         next_item=next_item,
         statuses=INBOX_STATUSES,
@@ -791,6 +792,78 @@ def _batch_item_payload(row):
         'task_type': routing.get('task_type') or 'other',
         'assignee_id': row['auto_assignee_id'] or assignment.get('id') or '',
         'default_actions': default_actions,
+    }
+
+
+def _recommended_action_plan(item):
+    proposals = _load_proposals(item)
+    analysis = _load_analysis(item)
+    proposal_by_kind = {}
+    for index, proposal in enumerate(proposals):
+        kind = proposal.get('kind')
+        if kind and kind not in proposal_by_kind:
+            proposal_by_kind[kind] = (index, proposal)
+
+    coordinates = _first_coordinate_text(item)
+    priority = item['priority'] or analysis.get('priority') or 'Средний'
+    category_key = analysis.get('category') or ''
+    has_player = bool(item['source_player_id'] or item['player_nick'] or (analysis.get('players') or []))
+    important = priority in ('Критический', 'Высокий')
+
+    desired_kinds = []
+    reasons = []
+
+    if 'task' in proposal_by_kind and not item['created_task_id'] and (
+        coordinates or important or category_key in ('attack', 'alstation', 'support', 'scout', 'diplomacy')
+    ):
+        desired_kinds.append('task')
+        reasons.append('нужно контролируемое исполнение')
+
+    if 'request' in proposal_by_kind and not item['created_request_id'] and (
+        has_player or category_key in ('support', 'question', 'diplomacy', 'attack')
+    ):
+        desired_kinds.append('request')
+        reasons.append('есть обращение игрока')
+
+    if 'log' in proposal_by_kind and not item['created_log_id'] and (coordinates or important):
+        desired_kinds.append('log')
+        reasons.append('важно зафиксировать в журнале и на карте')
+
+    if 'note' in proposal_by_kind and not item['created_note_id'] and has_player and category_key in ('support', 'development', 'question'):
+        desired_kinds.append('note')
+        reasons.append('полезно сохранить в карточке игрока')
+
+    if not desired_kinds and 'log' in proposal_by_kind and not item['created_log_id']:
+        desired_kinds.append('log')
+        reasons.append('достаточно журнальной фиксации')
+
+    selected_indexes = []
+    selected_proposals = []
+    for kind in desired_kinds:
+        index, proposal = proposal_by_kind[kind]
+        if index not in selected_indexes:
+            selected_indexes.append(index)
+            selected_proposals.append(proposal)
+
+    labels = {
+        'task': 'задачу',
+        'request': 'заявку',
+        'note': 'заметку игроку',
+        'log': 'журнал',
+    }
+    title = 'Нет действий для создания'
+    if selected_proposals:
+        title = 'Создать ' + ', '.join(labels.get(proposal.get('kind'), 'действие') for proposal in selected_proposals)
+
+    return {
+        'selected_indexes': selected_indexes,
+        'selected_proposals': selected_proposals,
+        'selected_kinds': [proposal.get('kind') for proposal in selected_proposals],
+        'title': title,
+        'reason': '; '.join(dict.fromkeys(reasons)) or 'можно подтвердить разбор без новых сущностей',
+        'coordinates': coordinates,
+        'map_url': url_for('map.index') + '?focus=' + coordinates if coordinates else None,
+        'status_after': 'В работе' if any(kind in ('task', 'request') for kind in desired_kinds) else 'Обработано',
     }
 
 

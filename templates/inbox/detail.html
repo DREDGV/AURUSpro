@@ -135,6 +135,89 @@
     <div class="col-xl-7 col-lg-6">
         <div class="panel mb-3">
             <div class="panel-header">
+                <h6><i class="bi bi-robot me-2"></i>Рекомендованный план</h6>
+                <span class="small text-muted">система предлагает, вы подтверждаете</span>
+            </div>
+            <div class="panel-body">
+                <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
+                    <div>
+                        <div class="fw-semibold">{{ action_plan.title }}</div>
+                        <div class="small text-muted mt-1">{{ action_plan.reason }}</div>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            <span class="badge {% if item['priority'] == 'Критический' %}bg-danger{% elif item['priority'] == 'Высокий' %}bg-warning text-dark{% else %}bg-info{% endif %}">
+                                {{ item['priority'] or '-' }}
+                            </span>
+                            {% if item['auto_assignee_nick'] %}
+                            <span class="badge bg-dark border">исполнитель: {{ item['auto_assignee_nick'] }}</span>
+                            {% endif %}
+                            {% if item['due_at'] %}
+                            <span class="badge bg-dark border">срок: {{ item['due_at'] }}</span>
+                            {% endif %}
+                            {% if action_plan.coordinates %}
+                            <a class="badge bg-dark border text-decoration-none" href="{{ action_plan.map_url }}">
+                                карта: {{ action_plan.coordinates }}
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2 justify-content-end">
+                        {% if action_plan.selected_indexes %}
+                        <form method="POST" action="{{ url_for('inbox.quick_resolve', item_id=item['id']) }}">
+                            <input type="hidden" name="summary" value="{{ item['summary'] or '' }}">
+                            <input type="hidden" name="category" value="{{ analysis.category_label or item['category'] or '' }}">
+                            <input type="hidden" name="priority" value="{{ item['priority'] or 'Средний' }}">
+                            <input type="hidden" name="status_after" value="{{ action_plan.status_after }}">
+                            <input type="hidden" name="source_player_id" value="{{ first_player_id }}">
+                            <input type="hidden" name="assignee_id" value="{{ item['auto_assignee_id'] or '' }}">
+                            <input type="hidden" name="due_at" value="{{ item['due_at'] or '' }}">
+                            <input type="hidden" name="coordinates" value="{{ first_coord }}">
+                            <input type="hidden" name="direction" value="{{ analysis.routing.direction if analysis.routing else 'Карта' }}">
+                            <input type="hidden" name="task_type" value="{{ analysis.routing.task_type if analysis.routing else 'other' }}">
+                            {% for idx in action_plan.selected_indexes %}
+                            <input type="hidden" name="selected_proposals" value="{{ idx }}">
+                            {% endfor %}
+                            <button class="btn btn-sm btn-success">
+                                <i class="bi bi-check2-circle"></i> Принять план
+                            </button>
+                        </form>
+                        {% endif %}
+                        {% if action_plan.map_url %}
+                        <a class="btn btn-sm btn-outline-info" href="{{ action_plan.map_url }}">
+                            <i class="bi bi-map"></i> На карту
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if action_plan.selected_proposals %}
+                <div class="row g-2 mt-3">
+                    {% for proposal in action_plan.selected_proposals %}
+                    <div class="col-md-6">
+                        <div class="p-2 rounded h-100" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);">
+                            <div class="fw-semibold small">
+                                {% if proposal.kind == 'task' %}<i class="bi bi-list-check text-info"></i> Задача
+                                {% elif proposal.kind == 'request' %}<i class="bi bi-life-preserver text-warning"></i> Заявка
+                                {% elif proposal.kind == 'note' %}<i class="bi bi-person-lines-fill text-primary"></i> Заметка
+                                {% elif proposal.kind == 'log' %}<i class="bi bi-journal-text text-success"></i> Журнал
+                                {% else %}Действие{% endif %}
+                            </div>
+                            <div class="small">{{ proposal.title }}</div>
+                            <div class="small text-muted">
+                                {% if proposal.direction %}{{ proposal.direction }}{% endif %}
+                                {% if proposal.assignee_nick %} · {{ proposal.assignee_nick }}{% endif %}
+                                {% if proposal.coordinates %} · {{ proposal.coordinates }}{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-muted small mt-3">Новых действий не требуется: можно изменить статус или создать действие вручную ниже.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="panel mb-3">
+            <div class="panel-header">
                 <h6><i class="bi bi-check2-square me-2"></i>Подтвердить разбор</h6>
                 <span class="small text-muted">Проверить поля и создать выбранные действия одним нажатием</span>
             </div>
