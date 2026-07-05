@@ -2,6 +2,7 @@
 {% block title %}{% if player %}{{ player['nick'] }}{% else %}Новый игрок{% endif %} — AURUS{% endblock %}
 {% block page_title %}{% if player %}{{ player['nick'] }}{% else %}Новый игрок{% endif %}{% endblock %}
 {% block content %}
+{% include "_command_nav.html" %}
 {% if edit_mode %}
 <h5 class="mb-3">{% if player %}Редактирование: {{ player['nick'] }}{% else %}Новый игрок{% endif %}</h5>
 <form method="POST" class="col-md-8">
@@ -193,25 +194,37 @@
                         <hr>
                         <div class="d-flex justify-content-between mb-2">
                             <span class="text-muted">Входящие:</span>
-                            <a class="link-accent" href="{{ url_for('inbox.list_items') }}">{{ command_stats.open_intake }}</a>
+                            <a class="link-accent" href="{{ url_for('inbox.list_items', player_id=player['id']) }}">{{ command_stats.open_intake }}</a>
                         </div>
                         <div class="d-flex justify-content-between mb-2">
                             <span class="text-muted">Задачи:</span>
-                            <span>{{ command_stats.open_tasks }}</span>
+                            <a class="link-accent" href="{{ url_for('tasks.list', assignee_id=player['id']) }}">{{ command_stats.open_tasks }}</a>
                         </div>
                         <div class="d-flex justify-content-between mb-2">
                             <span class="text-muted">Заявки:</span>
-                            <span>{{ command_stats.open_requests }}</span>
+                            <a class="link-accent" href="{{ url_for('center.requests_list', player_id=player['id']) }}">{{ command_stats.open_requests }}</a>
                         </div>
                         <div class="d-flex justify-content-between">
                             <span class="text-muted">Объекты на карте:</span>
+                            {% if player['coordinates'] %}
+                            <a class="link-accent" href="{{ url_for('map.index') }}?focus={{ player['coordinates'] }}">{{ command_stats.map_objects }}</a>
+                            {% else %}
                             <span>{{ command_stats.map_objects }}</span>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
                 <div class="d-grid gap-2">
                     <a href="{{ url_for('players.edit', player_id=player['id']) }}" class="btn btn-outline-primary">Редактировать</a>
                 </div>
+                {% set linked_action_title = 'Игрок: ' ~ player['nick'] %}
+                {% set linked_action_description = player['comment'] or player['needs_help_with'] or player['can_help_with'] or '' %}
+                {% set linked_action_coordinates = player['coordinates'] or '' %}
+                {% set linked_action_source_intake_id = '' %}
+                {% set linked_action_player_id = player['id'] %}
+                {% set linked_action_assignee_id = player['id'] %}
+                {% set linked_action_related_player = player['nick'] %}
+                {% include "_linked_actions.html" %}
                 <div class="panel mt-3">
                     <div class="panel-header">
                         <h6>Задачи игрока</h6>
@@ -227,7 +240,7 @@
                         {% if not player_tasks %}
                         <div class="text-muted small">Назначенных задач нет</div>
                         {% endif %}
-                        <a class="btn btn-sm btn-outline-secondary mt-2" href="{{ url_for('tasks.create') }}?assignee_id={{ player['id'] }}">Создать задачу</a>
+                        <a class="btn btn-sm btn-outline-secondary mt-2" href="{{ url_for('tasks.create', assignee_id=player['id'], title='Игрок: ' ~ player['nick'], coordinates=player['coordinates'] or '') }}">Создать задачу</a>
                     </div>
                 </div>
             </div>
@@ -240,7 +253,7 @@
                 <div class="panel mb-3">
                     <div class="panel-header">
                         <h6><i class="bi bi-inbox me-2"></i>Открытые входящие</h6>
-                        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('inbox.list_items') }}">Все входящие</a>
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('inbox.list_items', player_id=player['id']) }}">Все входящие</a>
                     </div>
                     <div class="panel-body">
                         {% for item in open_intake %}
@@ -259,7 +272,7 @@
                 <div class="panel mb-3">
                     <div class="panel-header">
                         <h6><i class="bi bi-life-preserver me-2"></i>Заявки</h6>
-                        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('center.create_request') }}">+ Заявка</a>
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('center.create_request', player_id=player['id'], title='Игрок: ' ~ player['nick'], coordinates=player['coordinates'] or '') }}">+ Заявка</a>
                     </div>
                     <div class="panel-body">
                         {% for r in player_requests %}
@@ -281,7 +294,7 @@
                 <div class="panel mb-3">
                     <div class="panel-header">
                         <h6><i class="bi bi-list-check me-2"></i>Задачи</h6>
-                        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('tasks.create') }}?assignee_id={{ player['id'] }}">+ Задача</a>
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('tasks.create', assignee_id=player['id'], title='Игрок: ' ~ player['nick'], coordinates=player['coordinates'] or '') }}">+ Задача</a>
                     </div>
                     <div class="panel-body">
                         {% for task in player_tasks %}
@@ -298,7 +311,7 @@
                 <div class="panel mb-3">
                     <div class="panel-header">
                         <h6><i class="bi bi-signpost-split me-2"></i>Решения</h6>
-                        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('center.create_decision') }}">+ Решение</a>
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('center.create_decision', proposer=player['nick'], title='Игрок: ' ~ player['nick'], coordinates=player['coordinates'] or '') }}">+ Решение</a>
                     </div>
                     <div class="panel-body">
                         {% for d in player_decisions %}

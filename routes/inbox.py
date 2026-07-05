@@ -341,6 +341,7 @@ def list_items():
     ensure_alliance_schema(db)
     status = request.args.get('status', '')
     view = request.args.get('view', '')
+    player_filter = request.args.get('player_id', '')
     q = '''SELECT i.*, p.nick as player_nick, ap.nick as auto_assignee_nick
            FROM intake_items i
            LEFT JOIN players p ON p.id = i.source_player_id
@@ -350,6 +351,9 @@ def list_items():
     if status:
         q += ' AND i.status = ?'
         params.append(status)
+    if player_filter:
+        q += ' AND i.source_player_id = ?'
+        params.append(player_filter)
     if view == 'map':
         q += " AND (i.map_alert = 1 OR i.raw_text LIKE '%:%:%')"
     elif view == 'overdue':
@@ -383,6 +387,7 @@ def list_items():
         source_types=SOURCE_TYPES,
         current_status=status,
         current_view=view,
+        current_player_id=player_filter,
         now_ts=datetime.now().strftime('%Y-%m-%d %H:%M'),
     )
 

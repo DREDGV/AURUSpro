@@ -11,6 +11,8 @@ def list():
         return redirect(url_for('auth.login'))
     query = request.args.get('q', '')
     status = request.args.get('status', '')
+    direction = request.args.get('direction', '')
+    role = request.args.get('role', '')
     db = get_db()
     ensure_alliance_schema(db)
     if query:
@@ -25,10 +27,16 @@ def list():
             'FROM players p ORDER BY p.points DESC'
         ).fetchall()
     total = len(all_players)
+    directions = sorted({p['direction'] for p in all_players if p['direction']})
+    roles = sorted({p['role'] for p in all_players if p['role']})
     if status:
         all_players = [p for p in all_players if p['player_status'] == status]
+    if direction:
+        all_players = [p for p in all_players if p['direction'] == direction]
+    if role:
+        all_players = [p for p in all_players if p['role'] == role]
     db.close()
-    return render_template('players/list.html', players=all_players, total=total)
+    return render_template('players/list.html', players=all_players, total=total, directions=directions, roles=roles)
 
 
 @players.route('/players/<int:player_id>')

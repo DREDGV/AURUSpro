@@ -550,6 +550,7 @@ def decisions():
         return redirect(url_for('auth.login'))
     status_filter = request.args.get('status', '')
     priority_filter = request.args.get('priority', '')
+    proposer_player_filter = request.args.get('proposer_player_id', '')
     db = get_db()
     ensure_alliance_schema(db)
     query = (
@@ -563,6 +564,9 @@ def decisions():
     if priority_filter:
         query += " AND d.priority = ?"
         params.append(priority_filter)
+    if proposer_player_filter:
+        query += " AND p.id = ?"
+        params.append(proposer_player_filter)
     query += (
         " ORDER BY CASE d.status WHEN 'Предложено' THEN 0 WHEN 'Согласовано' THEN 1 "
         "WHEN 'Выполнено' THEN 2 ELSE 3 END, d.created_at DESC"
@@ -574,6 +578,7 @@ def decisions():
         decisions=all_decisions,
         current_status=status_filter,
         current_priority=priority_filter,
+        current_proposer_player_id=proposer_player_filter,
     )
 
 
@@ -683,6 +688,7 @@ def requests_list():
     status_filter = request.args.get('status', '')
     type_filter = request.args.get('type', '')
     priority_filter = request.args.get('priority', '')
+    player_filter = request.args.get('player_id', '')
     db = get_db()
     query = "SELECT r.*, p.nick as player_nick FROM requests r LEFT JOIN players p ON r.player_id = p.id WHERE 1=1"
     params = []
@@ -695,6 +701,9 @@ def requests_list():
     if priority_filter:
         query += " AND r.priority = ?"
         params.append(priority_filter)
+    if player_filter:
+        query += " AND r.player_id = ?"
+        params.append(player_filter)
     query += " ORDER BY CASE r.status WHEN 'Новый' THEN 0 WHEN 'В работе' THEN 1 WHEN 'На паузе' THEN 2 WHEN 'Ожидает' THEN 3 WHEN 'Выполнен' THEN 4 ELSE 5 END, CASE r.priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END, r.created_at DESC"
     all_requests = db.execute(query, params).fetchall()
     stats = {
@@ -706,7 +715,8 @@ def requests_list():
     }
     db.close()
     return render_template('center/requests.html', requests=all_requests, stats=stats,
-        current_status=status_filter, current_type=type_filter, current_priority=priority_filter)
+        current_status=status_filter, current_type=type_filter, current_priority=priority_filter,
+        current_player_id=player_filter)
 
 
 @center.route('/center/requests/<int:request_id>', methods=['GET'])

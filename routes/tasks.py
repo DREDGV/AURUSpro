@@ -107,6 +107,7 @@ def list():
     priority_filter = request.args.get('priority', '')
     direction_filter = request.args.get('direction', '')
     type_filter = request.args.get('type', '')
+    assignee_filter = request.args.get('assignee_id', '')
 
     q = 'SELECT t.*, p.nick as assignee_nick FROM tasks t LEFT JOIN players p ON t.assignee_id = p.id WHERE 1=1'
     params = []
@@ -122,6 +123,9 @@ def list():
     if type_filter:
         q += ' AND t.task_type = ?'
         params.append(type_filter)
+    if assignee_filter:
+        q += ' AND t.assignee_id = ?'
+        params.append(assignee_filter)
     q += f' ORDER BY {_priority_order_sql()}, {_status_order_sql()}, t.created_at DESC'
     all_tasks = db.execute(q, params).fetchall()
 
@@ -151,6 +155,7 @@ def list():
         current_priority=priority_filter,
         current_direction=direction_filter,
         current_type=type_filter,
+        current_assignee_id=assignee_filter,
     )
 
 
