@@ -133,6 +133,123 @@
     <div class="col-xl-7 col-lg-6">
         <div class="panel mb-3">
             <div class="panel-header">
+                <h6><i class="bi bi-check2-square me-2"></i>Подтвердить разбор</h6>
+                <span class="small text-muted">Проверить поля и создать выбранные действия одним нажатием</span>
+            </div>
+            <div class="panel-body">
+                <form method="POST" action="{{ url_for('inbox.quick_resolve', item_id=item['id']) }}">
+                    <div class="mb-2">
+                        <label class="form-label small mb-1">Сводка</label>
+                        <input name="summary" class="form-control form-control-sm" value="{{ item['summary'] or '' }}">
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">Категория</label>
+                            <input name="category" class="form-control form-control-sm" value="{{ analysis.category_label or item['category'] or '' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">Приоритет</label>
+                            <select name="priority" class="form-select form-select-sm">
+                                {% for p in priorities %}
+                                <option value="{{ p }}" {% if (item['priority'] or 'Средний') == p %}selected{% endif %}>{{ p }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">Статус после</label>
+                            <select name="status_after" class="form-select form-select-sm">
+                                {% for s in ['В работе', 'Обработано', 'Требует подтверждения'] %}
+                                <option value="{{ s }}" {% if s == 'В работе' %}selected{% endif %}>{{ s }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">Игрок</label>
+                            <select name="source_player_id" class="form-select form-select-sm">
+                                <option value="">Не привязан</option>
+                                {% for p in players %}
+                                <option value="{{ p['id'] }}" {% if first_player_id|string == p['id']|string %}selected{% endif %}>{{ p['nick'] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">Исполнитель</label>
+                            <select name="assignee_id" class="form-select form-select-sm">
+                                <option value="">Не назначен</option>
+                                {% for p in players %}
+                                <option value="{{ p['id'] }}" {% if item['auto_assignee_id']|string == p['id']|string %}selected{% endif %}>{{ p['nick'] }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">Срок реакции</label>
+                            <input name="due_at" class="form-control form-control-sm" value="{{ item['due_at'] or '' }}" placeholder="YYYY-MM-DD HH:MM">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">Координаты</label>
+                            <input name="coordinates" class="form-control form-control-sm" value="{{ first_coord }}" placeholder="[2500:2500:0]">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">Направление задачи</label>
+                            <select name="direction" class="form-select form-select-sm">
+                                {% set current_direction = analysis.routing.direction if analysis.routing else 'Карта' %}
+                                {% for d in task_directions %}
+                                <option value="{{ d }}" {% if current_direction == d %}selected{% endif %}>{{ d }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">Тип задачи</label>
+                            <select name="task_type" class="form-select form-select-sm">
+                                {% set current_task_type = analysis.routing.task_type if analysis.routing else 'other' %}
+                                {% for t in task_types %}
+                                <option value="{{ t }}" {% if current_task_type == t %}selected{% endif %}>{{ t }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <div class="small text-muted fw-bold text-uppercase mb-2">Что создать</div>
+                        {% for proposal in proposals %}
+                        <label class="d-flex gap-2 align-items-start p-2 rounded mb-2" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);cursor:pointer;">
+                            <input class="form-check-input mt-1" type="checkbox" name="selected_proposals" value="{{ loop.index0 }}" {% if proposal.kind in ['task', 'request'] %}checked{% endif %}>
+                            <span>
+                                <span class="fw-semibold">
+                                    {% if proposal.kind == 'task' %}<i class="bi bi-list-check text-info"></i> Задача
+                                    {% elif proposal.kind == 'request' %}<i class="bi bi-life-preserver text-warning"></i> Заявка
+                                    {% elif proposal.kind == 'note' %}<i class="bi bi-person-lines-fill text-primary"></i> Заметка
+                                    {% elif proposal.kind == 'log' %}<i class="bi bi-journal-text text-success"></i> Журнал
+                                    {% else %}Действие{% endif %}
+                                </span>
+                                <span>{{ proposal.title }}</span>
+                                <br><small class="text-muted">
+                                    {{ proposal.priority or item['priority'] or '' }}
+                                    {% if proposal.coordinates %} · {{ proposal.coordinates }}{% endif %}
+                                    {% if proposal.direction %} · {{ proposal.direction }}{% endif %}
+                                    {% if proposal.assignee_nick %} · {{ proposal.assignee_nick }}{% endif %}
+                                </small>
+                            </span>
+                        </label>
+                        {% endfor %}
+                        {% if not proposals %}
+                        <div class="text-muted small">Нет предложенных действий. Можно только подтвердить статус и журнал.</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+                        <button class="btn btn-success btn-sm"><i class="bi bi-check2-circle"></i> Подтвердить и создать</button>
+                        <label class="form-check form-check-inline mb-0 small text-muted">
+                            <input class="form-check-input" type="checkbox" name="redirect_next" value="1">
+                            перейти к следующему
+                        </label>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="panel mb-3">
+            <div class="panel-header">
                 <h6><i class="bi bi-lightning-charge me-2"></i>Быстрые решения</h6>
                 <span class="small text-muted">Создать вручную, если авторазбор предложил не все</span>
             </div>
