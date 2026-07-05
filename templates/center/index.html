@@ -85,6 +85,12 @@
                         {% if item['due_at'] %} · до {{ item['due_at'] }}{% endif %}
                         {% if item['auto_assignee_nick'] %} · {{ item['auto_assignee_nick'] }}{% endif %}
                     </small>
+                    <form method="POST" action="{{ url_for('inbox.accept_plan', item_id=item['id']) }}" class="mt-2">
+                        <input type="hidden" name="next" value="{{ url_for('center.index') }}">
+                        <button class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-check2-circle"></i> Принять план
+                        </button>
+                    </form>
                 </div>
                 {% endfor %}
             </div>

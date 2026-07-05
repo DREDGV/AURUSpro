@@ -126,6 +126,10 @@
                             </small>
                         </div>
                         <div class="btn-group btn-group-sm flex-shrink-0">
+                            <form method="POST" action="{{ url_for('inbox.accept_plan', item_id=item['id']) }}" class="d-inline">
+                                <input type="hidden" name="next" value="{{ url_for('center.control') }}">
+                                <button class="btn btn-outline-success" title="Принять рекомендованный план"><i class="bi bi-check2-circle"></i></button>
+                            </form>
                             <button class="btn btn-outline-primary control-action" title="В работу" data-source="inbox" data-id="{{ item['id'] }}" data-action="start"><i class="bi bi-play-fill"></i></button>
                             <button class="btn btn-outline-success control-action" title="Обработано" data-source="inbox" data-id="{{ item['id'] }}" data-action="done"><i class="bi bi-check2"></i></button>
                         </div>

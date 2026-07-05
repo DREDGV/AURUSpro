@@ -867,6 +867,68 @@ def _recommended_action_plan(item):
     }
 
 
+def _accept_recommended_plan(db, item):
+    plan = _recommended_action_plan(item)
+    proposals = _load_proposals(item)
+    analysis = _load_analysis(item)
+    coordinates = plan.get('coordinates') or _first_coordinate_text(item)
+    routing = analysis.get('routing') or {}
+    item_for_create = dict(item)
+    overrides = {
+        'priority': item['priority'] or analysis.get('priority') or 'Средний',
+        'coordinates': coordinates,
+        'assignee_id': item['auto_assignee_id'],
+        'assignee': item['auto_assignee_nick'],
+        'deadline': item['due_at'],
+        'direction': routing.get('direction') or 'Карта',
+        'task_type': routing.get('task_type') or 'other',
+        'source_player_id': item['source_player_id'],
+        'player_id': item['source_player_id'],
+    }
+
+    created_refs = []
+    for idx in plan.get('selected_indexes') or []:
+        if 0 <= idx < len(proposals):
+            proposal = proposals[idx]
+            action = proposal.get('kind')
+            target_type, created_id = _create_work_from_intake(db, item_for_create, proposal, action, overrides)
+            created_refs.append('%s #%s' % (target_type, created_id))
+            if target_type == 'task':
+                item_for_create['created_task_id'] = created_id
+            elif target_type == 'request':
+                item_for_create['created_request_id'] = created_id
+            elif target_type == 'player_note':
+                item_for_create['created_note_id'] = created_id
+            elif target_type == 'log':
+                item_for_create['created_log_id'] = created_id
+
+    status_after = plan.get('status_after') if plan.get('status_after') in INBOX_STATUSES else 'В работе'
+    db.execute(
+        'UPDATE intake_items SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+        (status_after, item['id']),
+    )
+    log_description = 'Принят рекомендованный план. Создано: %s.' % (
+        ', '.join(created_refs) if created_refs else 'без новых действий'
+    )
+    db.execute(
+        '''INSERT INTO alliance_log (event_type, title, description, related_player, author, event_date,
+           coordinates, source_intake_id)
+           VALUES (?, ?, ?, ?, ?, date('now'), ?, ?)''',
+        (
+            'Входящее',
+            'Принят рекомендованный план входящего #%d' % item['id'],
+            log_description,
+            item['player_nick'],
+            session.get('username'),
+            coordinates,
+            item['id'],
+        ),
+    )
+    confirmation_log_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+    _link_work_item(db, item['id'], 'log', confirmation_log_id, relation='recommended_plan')
+    return plan, created_refs
+
+
 @inbox.route('/inbox/<int:item_id>/quick-resolve', methods=['POST'])
 def quick_resolve(item_id):
     if 'user_id' not in session:
@@ -1024,6 +1086,69 @@ def quick_resolve(item_id):
     if next_item:
         return redirect(url_for('inbox.detail', item_id=next_item['id']))
     return redirect(url_for('inbox.detail', item_id=item_id))
+
+
+@inbox.route('/inbox/<int:item_id>/accept-plan', methods=['POST'])
+def accept_plan(item_id):
+    if 'user_id' not in session:
+        if request.is_json:
+            return jsonify({'error': 'Unauthorized'}), 401
+        return redirect(url_for('auth.login'))
+    db = get_db()
+    ensure_alliance_schema(db)
+    item = db.execute(
+        '''SELECT i.*, p.nick as player_nick, ap.nick as auto_assignee_nick
+           FROM intake_items i
+           LEFT JOIN players p ON p.id = i.source_player_id
+           LEFT JOIN players ap ON ap.id = i.auto_assignee_id
+           WHERE i.id = ?''',
+        (item_id,),
+    ).fetchone()
+    if not item:
+        db.close()
+        if request.is_json:
+            return jsonify({'error': 'Inbox item not found'}), 404
+        flash('Входящее не найдено', 'danger')
+        return redirect(url_for('inbox.list_items'))
+
+    try:
+        plan, created_refs = _accept_recommended_plan(db, item)
+    except ValueError as exc:
+        db.close()
+        if request.is_json:
+            return jsonify({'error': str(exc)}), 400
+        flash(str(exc), 'warning')
+        return redirect(url_for('inbox.detail', item_id=item_id))
+
+    next_item = None
+    if request.form.get('redirect_next') == '1':
+        next_item = db.execute(
+            """SELECT id FROM intake_items
+               WHERE id != ? AND status IN ('Новое', 'Разобрано', 'Требует подтверждения', 'В работе')
+               ORDER BY CASE status
+                   WHEN 'Новое' THEN 0
+                   WHEN 'Требует подтверждения' THEN 1
+                   WHEN 'Разобрано' THEN 2
+                   WHEN 'В работе' THEN 3
+                   ELSE 4
+               END, created_at ASC
+               LIMIT 1""",
+            (item_id,),
+        ).fetchone()
+    db.commit()
+    db.close()
+
+    if request.is_json:
+        return jsonify({
+            'status': 'ok',
+            'created': created_refs,
+            'selected_kinds': plan.get('selected_kinds') or [],
+            'url': url_for('inbox.detail', item_id=item_id),
+        })
+    flash('Рекомендованный план принят%s' % (': ' + ', '.join(created_refs) if created_refs else ''), 'success')
+    if next_item:
+        return redirect(url_for('inbox.detail', item_id=next_item['id']))
+    return redirect(request.form.get('next') or request.referrer or url_for('inbox.detail', item_id=item_id))
 
 
 @inbox.route('/inbox/<int:item_id>/apply', methods=['POST'])
