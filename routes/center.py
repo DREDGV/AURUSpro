@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, session, redirect, url_for, reques
 from utils.db import get_db
 from utils.schema import ensure_alliance_schema
 from utils.work_context import build_work_context
+from routes.inbox import _first_detected_player_id, _update_item_analysis
 from routes.map import _existing_alstations, _network_issue_payload, _intake_alerts, _work_markers
 import json
 
@@ -200,6 +201,7 @@ def index():
     ]
     map_intake_alerts = _intake_alerts(db, limit=50)[:6]
     map_work_markers = _work_markers(db, limit=50)[:6]
+    quick_players = db.execute("SELECT id, nick FROM players ORDER BY nick").fetchall()
 
     db.close()
     return render_template('center/index.html',
@@ -222,6 +224,7 @@ def index():
         map_tasks=map_tasks,
         map_intake_alerts=map_intake_alerts,
         map_work_markers=map_work_markers,
+        quick_players=quick_players,
         network_issues=network_issues)
 
 
@@ -1089,6 +1092,128 @@ def ajax_quick_log():
     db.commit()
     db.close()
     return jsonify({'status': 'ok'})
+
+
+@center.route('/center/ajax/quick-create', methods=['POST'])
+def ajax_quick_create():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Auth required'}), 401
+    data = request.get_json() or {}
+    mode = (data.get('mode') or '').strip()
+    title = (data.get('title') or '').strip()
+    description = (data.get('description') or '').strip()
+    coordinates = (data.get('coordinates') or '').strip() or None
+    player_id = data.get('player_id') or None
+    if mode not in ('intake', 'task', 'log'):
+        return jsonify({'error': 'Invalid mode'}), 400
+
+    db = get_db()
+    ensure_alliance_schema(db)
+
+    if mode == 'intake':
+        raw_text = description or title
+        if not raw_text:
+            db.close()
+            return jsonify({'error': 'Введите текст входящего'}), 400
+        if coordinates and coordinates not in raw_text:
+            raw_text = '%s\nКоординаты: %s' % (raw_text, coordinates)
+        db.execute(
+            '''INSERT INTO intake_items (source_type, source_player_id, raw_text, status, author)
+               VALUES (?, ?, ?, 'Новое', ?)''',
+            (data.get('source_type') or 'manual', player_id, raw_text, session.get('username')),
+        )
+        item_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        analysis = _update_item_analysis(db, item_id, raw_text)
+        detected_player_id = None if player_id else _first_detected_player_id(analysis)
+        if detected_player_id:
+            db.execute(
+                'UPDATE intake_items SET source_player_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+                (detected_player_id, item_id),
+            )
+        found_coords = analysis.get('coordinates') or []
+        coord_text = coordinates or (found_coords[0].get('text') if found_coords else None)
+        log_id = _log_control_event(
+            db,
+            'Входящее',
+            'Быстро создано входящее из центра',
+            analysis.get('summary') or raw_text[:160],
+            coordinates=coord_text,
+            source_intake_id=item_id,
+        )
+        _link_intake(db, item_id, 'log', log_id, 'quick_create')
+        db.commit()
+        db.close()
+        return jsonify({
+            'status': 'ok',
+            'kind': 'intake',
+            'id': item_id,
+            'url': url_for('inbox.detail', item_id=item_id),
+        })
+
+    if mode == 'task':
+        if not title:
+            title = 'Задача из центра управления'
+        priority = (data.get('priority') or 'Средний').strip()
+        direction = (data.get('direction') or 'Карта').strip()
+        task_type = (data.get('task_type') or 'other').strip()
+        deadline = (data.get('deadline') or '').replace('T', ' ') or None
+        db.execute(
+            '''INSERT INTO tasks (title, direction, description, assignee_id, priority, status,
+               deadline, coordinates, task_type, comment, updated_at)
+               VALUES (?, ?, ?, ?, ?, 'Новая', ?, ?, ?, ?, CURRENT_TIMESTAMP)''',
+            (
+                title,
+                direction,
+                description or None,
+                data.get('assignee_id') or None,
+                priority,
+                deadline,
+                coordinates,
+                task_type,
+                'Быстро создано из Центра управления',
+            ),
+        )
+        task_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        _log_control_event(
+            db,
+            'Задача',
+            'Быстро создана задача из центра',
+            title,
+            coordinates=coordinates,
+            related_task_id=task_id,
+        )
+        db.commit()
+        db.close()
+        return jsonify({
+            'status': 'ok',
+            'kind': 'task',
+            'id': task_id,
+            'url': url_for('tasks.detail', task_id=task_id),
+        })
+
+    if mode == 'log':
+        if not title:
+            db.close()
+            return jsonify({'error': 'Введите заголовок журнала'}), 400
+        log_id = _log_control_event(
+            db,
+            (data.get('event_type') or 'Прочее').strip(),
+            title,
+            description,
+            coordinates=coordinates,
+            related_player=data.get('related_player') or None,
+        )
+        db.commit()
+        db.close()
+        return jsonify({
+            'status': 'ok',
+            'kind': 'log',
+            'id': log_id,
+            'url': url_for('center.log'),
+        })
+
+    db.close()
+    return jsonify({'error': 'Unsupported mode'}), 400
 
 
 @center.route('/center/ajax/player/<int:player_id>/requests')

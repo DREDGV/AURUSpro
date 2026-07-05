@@ -63,6 +63,7 @@
     <div class="panel-header">
         <h6><i class="bi bi-command me-2"></i>Требует внимания</h6>
         <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-primary" onclick="showQuickCreate('intake')"><i class="bi bi-lightning-charge"></i> Быстрый ввод</button>
             <a href="{{ url_for('center.control') }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-activity"></i> Контроль</a>
             <a href="{{ url_for('tasks.create') }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i> Задача</a>
             <a href="{{ url_for('inbox.list_items') }}" class="btn btn-sm btn-outline-info"><i class="bi bi-inbox"></i> Входящие</a>
@@ -288,6 +289,101 @@
     {% endif %}
 </div>
 
+<div id="quickCreateModal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Быстрый ввод штаба</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Тип записи</label>
+                        <select id="qc-mode" class="form-select" onchange="setQuickCreateMode(this.value)">
+                            <option value="intake">Входящее сообщение</option>
+                            <option value="task">Задача</option>
+                            <option value="log">Запись журнала</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 qc-task-field">
+                        <label class="form-label">Направление</label>
+                        <select id="qc-direction" class="form-select">
+                            {% for d in ['Карта', 'Алстанции', 'Помощь игрокам', 'Разведка', 'Атака', 'Развитие', 'Дипломатия'] %}
+                            <option value="{{ d }}">{{ d }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4 qc-task-field">
+                        <label class="form-label">Приоритет</label>
+                        <select id="qc-priority" class="form-select">
+                            {% for p in ['Критический', 'Высокий', 'Средний', 'Низкий'] %}
+                            <option value="{{ p }}" {% if p == 'Средний' %}selected{% endif %}>{{ p }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Заголовок</label>
+                        <input type="text" id="qc-title" class="form-control" placeholder="Коротко: что произошло или что сделать">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Координаты</label>
+                        <input type="text" id="qc-coordinates" class="form-control" placeholder="[2500:2500:0]">
+                    </div>
+                    <div class="col-md-3 qc-log-field">
+                        <label class="form-label">Тип события</label>
+                        <select id="qc-event-type" class="form-select">
+                            {% for t in ['Игрок', 'Военное', 'Дипломатия', 'Экономика', 'Решение', 'Проблема', 'Прочее'] %}
+                            <option value="{{ t }}">{{ t }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 qc-player-field">
+                        <label class="form-label">Игрок / источник</label>
+                        <input type="text" id="qc-player-search" class="form-control" list="quick-player-options" placeholder="Начните вводить ник">
+                        <input type="hidden" id="qc-player-id">
+                    </div>
+                    <div class="col-md-6 qc-task-field">
+                        <label class="form-label">Исполнитель</label>
+                        <input type="text" id="qc-assignee-search" class="form-control" list="quick-player-options" placeholder="Начните вводить ник">
+                        <input type="hidden" id="qc-assignee-id">
+                    </div>
+                    <div class="col-md-6 qc-task-field">
+                        <label class="form-label">Тип задачи</label>
+                        <select id="qc-task-type" class="form-select">
+                            <option value="other">Другое</option>
+                            <option value="build_alstation">Построить алстанцию</option>
+                            <option value="move_alstation">Перенести алстанцию</option>
+                            <option value="check_alstation">Проверить алстанцию</option>
+                            <option value="scout_point">Разведать точку</option>
+                            <option value="help_player">Помочь игроку</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 qc-task-field">
+                        <label class="form-label">Срок</label>
+                        <input type="datetime-local" id="qc-deadline" class="form-control">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Текст</label>
+                        <textarea id="qc-description" class="form-control" rows="5" placeholder="Вставьте сообщение игрока или опишите задачу/событие"></textarea>
+                        <div class="form-text">Для входящего система сразу выполнит разбор: игроки, координаты, направление, срочность и предлагаемые действия.</div>
+                    </div>
+                </div>
+                <datalist id="quick-player-options">
+                    {% for p in quick_players %}
+                    <option value="{{ p['nick'] }}" data-id="{{ p['id'] }}"></option>
+                    {% endfor %}
+                </datalist>
+                <div id="qc-error" class="alert alert-danger mt-3 mb-0 d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button class="btn btn-primary" onclick="submitQuickCreate()"><i class="bi bi-check2"></i> Создать</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="quickLogModal" class="modal fade" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -346,6 +442,105 @@ function quickDecision(decisionId, newStatus) {
     })
     .then(function(r) { return r.json(); })
     .then(function(data) { if (data.status === 'ok') location.reload(); });
+}
+
+function showQuickCreate(mode) {
+    var selectedMode = mode || 'intake';
+    var modalEl = document.getElementById('quickCreateModal');
+    document.getElementById('qc-mode').value = selectedMode;
+    setQuickCreateMode(selectedMode);
+    new bootstrap.Modal(modalEl).show();
+}
+
+function setQuickCreateMode(mode) {
+    var isTask = mode === 'task';
+    var isLog = mode === 'log';
+    document.querySelectorAll('.qc-task-field').forEach(function(el) {
+        el.classList.toggle('d-none', !isTask);
+    });
+    document.querySelectorAll('.qc-log-field').forEach(function(el) {
+        el.classList.toggle('d-none', !isLog);
+    });
+    document.querySelectorAll('.qc-player-field').forEach(function(el) {
+        el.classList.toggle('d-none', isTask);
+    });
+    var description = document.getElementById('qc-description');
+    if (mode === 'intake') {
+        description.placeholder = 'Вставьте сообщение игрока: просьбу, вопрос, проблему, координаты';
+    } else if (mode === 'task') {
+        description.placeholder = 'Опишите, что нужно сделать и какие условия важны';
+    } else {
+        description.placeholder = 'Опишите событие для журнала';
+    }
+    clearQuickCreateError();
+}
+
+function quickPlayerIdByNick(nick) {
+    var normalized = (nick || '').trim().toLowerCase();
+    if (!normalized) return '';
+    var options = document.querySelectorAll('#quick-player-options option');
+    for (var i = 0; i < options.length; i++) {
+        if ((options[i].value || '').trim().toLowerCase() === normalized) {
+            return options[i].dataset.id || '';
+        }
+    }
+    return '';
+}
+
+function clearQuickCreateError() {
+    var error = document.getElementById('qc-error');
+    error.classList.add('d-none');
+    error.textContent = '';
+}
+
+function showQuickCreateError(message) {
+    var error = document.getElementById('qc-error');
+    error.textContent = message || 'Не удалось создать запись';
+    error.classList.remove('d-none');
+}
+
+function submitQuickCreate() {
+    clearQuickCreateError();
+    var mode = document.getElementById('qc-mode').value;
+    var playerNick = document.getElementById('qc-player-search').value.trim();
+    var assigneeNick = document.getElementById('qc-assignee-search').value.trim();
+    var playerId = quickPlayerIdByNick(playerNick);
+    var assigneeId = quickPlayerIdByNick(assigneeNick);
+    var payload = {
+        mode: mode,
+        title: document.getElementById('qc-title').value.trim(),
+        description: document.getElementById('qc-description').value.trim(),
+        coordinates: document.getElementById('qc-coordinates').value.trim(),
+        player_id: playerId,
+        assignee_id: assigneeId,
+        related_player: playerNick,
+        direction: document.getElementById('qc-direction').value,
+        priority: document.getElementById('qc-priority').value,
+        task_type: document.getElementById('qc-task-type').value,
+        deadline: document.getElementById('qc-deadline').value,
+        event_type: document.getElementById('qc-event-type').value
+    };
+    fetch('/center/ajax/quick-create', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+    .then(function(r) {
+        return r.json().then(function(data) {
+            if (!r.ok) throw data;
+            return data;
+        });
+    })
+    .then(function(data) {
+        if (data.url) {
+            window.location = data.url;
+        } else {
+            location.reload();
+        }
+    })
+    .catch(function(error) {
+        showQuickCreateError(error && error.error ? error.error : 'Не удалось создать запись');
+    });
 }
 
 function showQuickLog() {
