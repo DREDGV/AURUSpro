@@ -659,14 +659,15 @@ def create_decision():
         db = get_db()
         ensure_alliance_schema(db)
         db.execute(
-            '''INSERT INTO decisions (title, proposer, description, status, priority, deadline, coordinates, created_by)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+            '''INSERT INTO decisions (title, proposer, description, status, priority, deadline, coordinates, source_intake_id, created_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             (data['title'], data.get('proposer'), data.get('description'),
              data.get('status', 'Предложено'), data.get('priority', 'Средний'),
-             data.get('deadline'), data.get('coordinates'), session.get('username'))
+             data.get('deadline'), data.get('coordinates'), data.get('source_intake_id') or None, session.get('username'))
         )
         decision_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         decision = db.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,)).fetchone()
+        _link_intake(db, data.get('source_intake_id'), 'decision', decision_id, 'manual_created')
         _log_decision_event(db, decision, 'Создано решение', decision['title'], event_type='Создание')
         db.commit()
         db.close()
@@ -828,17 +829,18 @@ def create_request():
         db = get_db()
         ensure_alliance_schema(db)
         db.execute(
-            '''INSERT INTO requests (player_id, request_type, title, description, priority, status, assignee, coordinates, due_at)
-               VALUES (?, ?, ?, ?, ?, 'Новый', ?, ?, ?)''',
+            '''INSERT INTO requests (player_id, request_type, title, description, priority, status, assignee, coordinates, due_at, source_intake_id)
+               VALUES (?, ?, ?, ?, ?, 'Новый', ?, ?, ?, ?)''',
             (data.get('player_id') or None, data.get('request_type', 'Другое'),
              data['title'], data.get('description'), data.get('priority', 'Средний'),
-             data.get('assignee'), data.get('coordinates'), data.get('due_at'))
+             data.get('assignee'), data.get('coordinates'), data.get('due_at'), data.get('source_intake_id') or None)
         )
         request_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         req = db.execute(
             "SELECT r.*, p.nick as player_nick FROM requests r LEFT JOIN players p ON r.player_id = p.id WHERE r.id = ?",
             (request_id,),
         ).fetchone()
+        _link_intake(db, data.get('source_intake_id'), 'request', request_id, 'manual_created')
         _log_request_event(db, req, 'Создана заявка', req['title'], event_type='Создание')
         db.commit()
         db.close()
@@ -873,12 +875,14 @@ def create_log():
         db = get_db()
         ensure_alliance_schema(db)
         db.execute(
-            '''INSERT INTO alliance_log (event_type, title, description, related_player, author, event_date, coordinates)
-               VALUES (?, ?, ?, ?, ?, ?, ?)''',
+            '''INSERT INTO alliance_log (event_type, title, description, related_player, author, event_date, coordinates, source_intake_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
             (data.get('event_type', 'Прочее'), data['title'], data.get('description'),
              data.get('related_player'), data.get('author', session.get('username')),
-             data.get('event_date'), data.get('coordinates'))
+             data.get('event_date'), data.get('coordinates'), data.get('source_intake_id') or None)
         )
+        log_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        _link_intake(db, data.get('source_intake_id'), 'log', log_id, 'manual_created')
         db.commit()
         db.close()
         flash('Событие добавлено', 'success')

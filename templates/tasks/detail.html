@@ -77,6 +77,14 @@
         </div>
 
         {% include "_work_context.html" %}
+        {% set linked_action_title = task['title'] %}
+        {% set linked_action_description = task['description'] or task['comment'] or '' %}
+        {% set linked_action_coordinates = task['coordinates'] or '' %}
+        {% set linked_action_source_intake_id = task['source_intake_id'] or '' %}
+        {% set linked_action_player_id = '' %}
+        {% set linked_action_assignee_id = task['assignee_id'] or '' %}
+        {% set linked_action_related_player = task['assignee_nick'] or '' %}
+        {% include "_linked_actions.html" %}
 
         {% if related_log %}
         <div class="panel mb-3">

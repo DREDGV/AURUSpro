@@ -137,6 +137,14 @@
         {% endif %}
 
         {% include "_work_context.html" %}
+        {% set linked_action_title = item['summary'] or ('Входящее #' ~ item['id']) %}
+        {% set linked_action_description = item['raw_text'] %}
+        {% set linked_action_coordinates = first_coord %}
+        {% set linked_action_source_intake_id = item['id'] %}
+        {% set linked_action_player_id = first_player_id %}
+        {% set linked_action_assignee_id = item['auto_assignee_id'] or '' %}
+        {% set linked_action_related_player = item['player_nick'] or '' %}
+        {% include "_linked_actions.html" %}
     </div>
 
     <div class="col-xl-7 col-lg-6">

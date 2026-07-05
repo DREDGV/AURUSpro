@@ -6,7 +6,7 @@
 <form method="POST" class="col-md-8">
     <div class="mb-3">
         <label class="form-label fw-semibold">Название *</label>
-        <input type="text" name="title" class="form-control" required>
+        <input type="text" name="title" class="form-control" value="{{ request.args.get('title', '') }}" required>
     </div>
     <div class="row mb-3">
         <div class="col-md-4">
@@ -14,7 +14,7 @@
             <select name="player_id" class="form-select">
                 <option value="">— Не привязан —</option>
                 {% for p in players %}
-                <option value="{{ p['id'] }}">{{ p['nick'] }}</option>
+                <option value="{{ p['id'] }}" {% if request.args.get('player_id') == p['id']|string %}selected{% endif %}>{{ p['nick'] }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -22,7 +22,7 @@
             <label class="form-label fw-semibold">Тип</label>
             <select name="request_type" class="form-select">
                 {% for t in ['Ресурсы', 'Совет', 'Защита', 'Наставничество', 'Техническая', 'Другое'] %}
-                <option value="{{ t }}">{{ t }}</option>
+                <option value="{{ t }}" {% if request.args.get('request_type') == t %}selected{% endif %}>{{ t }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -30,29 +30,33 @@
             <label class="form-label fw-semibold">Приоритет</label>
             <select name="priority" class="form-select">
                 {% for p in ['Критический', 'Высокий', 'Средний', 'Низкий'] %}
-                <option value="{{ p }}">{{ p }}</option>
+                <option value="{{ p }}" {% if request.args.get('priority') == p %}selected{% endif %}>{{ p }}</option>
                 {% endfor %}
             </select>
         </div>
     </div>
     <div class="mb-3">
         <label class="form-label fw-semibold">Описание</label>
-        <textarea name="description" class="form-control" rows="4"></textarea>
+        <textarea name="description" class="form-control" rows="4">{{ request.args.get('description', '') }}</textarea>
     </div>
     <div class="row mb-3">
         <div class="col-md-4">
             <label class="form-label fw-semibold">Ответственный</label>
-            <input type="text" name="assignee" class="form-control" placeholder="Кто будет решать">
+            <input type="text" name="assignee" class="form-control" value="{{ request.args.get('assignee', '') }}" placeholder="Кто будет решать">
         </div>
         <div class="col-md-4">
             <label class="form-label fw-semibold">Координаты</label>
-            <input type="text" name="coordinates" class="form-control" placeholder="[2500:2500:0]">
+            <input type="text" name="coordinates" class="form-control" value="{{ request.args.get('coordinates', '') }}" placeholder="[2500:2500:0]">
         </div>
         <div class="col-md-4">
             <label class="form-label fw-semibold">Срок реакции</label>
-            <input type="datetime-local" name="due_at" class="form-control">
+            <input type="datetime-local" name="due_at" class="form-control" value="{{ request.args.get('due_at', '') }}">
         </div>
     </div>
+    {% if request.args.get('source_intake_id') %}
+    <input type="hidden" name="source_intake_id" value="{{ request.args.get('source_intake_id') }}">
+    <div class="small text-muted mb-2">Будет связано с входящим #{{ request.args.get('source_intake_id') }}</div>
+    {% endif %}
     <button type="submit" class="btn" style="background:var(--accent);color:#fff;">Создать</button>
     <a href="{{ url_for('center.requests_list') }}" class="btn btn-secondary">Отмена</a>
 </form>

@@ -1,0 +1,42 @@
+{% set la_title = linked_action_title if linked_action_title is defined else 'Связанное действие' %}
+{% set la_description = linked_action_description if linked_action_description is defined else '' %}
+{% set la_coordinates = linked_action_coordinates if linked_action_coordinates is defined else '' %}
+{% set la_source_intake_id = linked_action_source_intake_id if linked_action_source_intake_id is defined else '' %}
+{% set la_player_id = linked_action_player_id if linked_action_player_id is defined else '' %}
+{% set la_assignee_id = linked_action_assignee_id if linked_action_assignee_id is defined else '' %}
+{% set la_related_player = linked_action_related_player if linked_action_related_player is defined else '' %}
+
+<div class="panel mb-3">
+    <div class="panel-header">
+        <h6><i class="bi bi-lightning-charge me-2"></i>Связанные действия</h6>
+        <span class="small text-muted">создать запись уже с контекстом</span>
+    </div>
+    <div class="panel-body">
+        <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('tasks.create', title=la_title, description=la_description, coordinates=la_coordinates, assignee_id=la_assignee_id, source_intake_id=la_source_intake_id) }}">
+                <i class="bi bi-list-check"></i> Задача
+            </a>
+            <a class="btn btn-sm btn-outline-warning" href="{{ url_for('center.create_request', title=la_title, description=la_description, coordinates=la_coordinates, player_id=la_player_id, source_intake_id=la_source_intake_id) }}">
+                <i class="bi bi-life-preserver"></i> Заявка
+            </a>
+            <a class="btn btn-sm btn-outline-success" href="{{ url_for('center.create_decision', title=la_title, description=la_description, coordinates=la_coordinates, proposer=la_related_player, source_intake_id=la_source_intake_id) }}">
+                <i class="bi bi-check2-square"></i> Решение
+            </a>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('center.create_log', title=la_title, description=la_description, coordinates=la_coordinates, related_player=la_related_player, source_intake_id=la_source_intake_id) }}">
+                <i class="bi bi-journal-text"></i> Журнал
+            </a>
+            {% if la_coordinates %}
+            <a class="btn btn-sm btn-outline-info" href="{{ url_for('map.index') }}?focus={{ la_coordinates }}">
+                <i class="bi bi-map"></i> На карту
+            </a>
+            {% endif %}
+        </div>
+        {% if la_source_intake_id or la_coordinates or la_related_player %}
+        <div class="small text-muted mt-2">
+            {% if la_source_intake_id %}источник: входящее #{{ la_source_intake_id }}{% endif %}
+            {% if la_coordinates %}{% if la_source_intake_id %} · {% endif %}координаты: <code>{{ la_coordinates }}</code>{% endif %}
+            {% if la_related_player %}{% if la_source_intake_id or la_coordinates %} · {% endif %}игрок: {{ la_related_player }}{% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>

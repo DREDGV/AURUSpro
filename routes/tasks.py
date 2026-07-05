@@ -164,8 +164,8 @@ def create():
         data = {k: v for k, v in request.form.items()}
         db.execute(
             '''INSERT INTO tasks (title, direction, description, assignee_id, participants, priority, status,
-               deadline, comment, coordinates, map_object_id, map_object_type, task_type, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''',
+               deadline, comment, coordinates, map_object_id, map_object_type, task_type, source_intake_id, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''',
             (
                 data['title'],
                 data.get('direction'),
@@ -180,6 +180,7 @@ def create():
                 data.get('map_object_id') or None,
                 data.get('map_object_type'),
                 data.get('task_type') or 'other',
+                data.get('source_intake_id') or None,
             ),
         )
         task_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
@@ -188,6 +189,7 @@ def create():
                FROM tasks t LEFT JOIN players p ON t.assignee_id = p.id WHERE t.id = ?''',
             (task_id,),
         ).fetchone()
+        _link_intake(db, data.get('source_intake_id'), 'task', task_id, 'manual_created')
         _log_task_event(db, row, 'Создана задача', row['title'], event_type='Создание')
         db.commit()
         db.close()

@@ -6,40 +6,44 @@
 <form method="POST" class="col-md-8">
     <div class="mb-3">
         <label class="form-label fw-semibold">Название *</label>
-        <input type="text" name="title" class="form-control" required>
+        <input type="text" name="title" class="form-control" value="{{ request.args.get('title', '') }}" required>
     </div>
     <div class="row mb-3">
         <div class="col-md-4">
             <label class="form-label fw-semibold">Тип</label>
             <select name="event_type" class="form-select">
                 {% for t in ['Игрок', 'Военное', 'Дипломатия', 'Экономика', 'Решение', 'Проблема', 'Создание', 'Прочее'] %}
-                <option value="{{ t }}">{{ t }}</option>
+                <option value="{{ t }}" {% if request.args.get('event_type') == t %}selected{% endif %}>{{ t }}</option>
                 {% endfor %}
             </select>
         </div>
         <div class="col-md-4">
             <label class="form-label fw-semibold">Дата события</label>
-            <input type="text" name="event_date" class="form-control" placeholder="дд.мм.гггг">
+            <input type="text" name="event_date" class="form-control" value="{{ request.args.get('event_date', '') }}" placeholder="дд.мм.гггг">
         </div>
         <div class="col-md-4">
             <label class="form-label fw-semibold">Связанный игрок</label>
-            <input type="text" name="related_player" class="form-control" placeholder="Ник игрока">
+            <input type="text" name="related_player" class="form-control" value="{{ request.args.get('related_player', '') }}" placeholder="Ник игрока">
         </div>
     </div>
     <div class="mb-3">
         <label class="form-label fw-semibold">Описание</label>
-        <textarea name="description" class="form-control" rows="4"></textarea>
+        <textarea name="description" class="form-control" rows="4">{{ request.args.get('description', '') }}</textarea>
     </div>
     <div class="row mb-3">
         <div class="col-md-6">
             <label class="form-label fw-semibold">Автор</label>
-            <input type="text" name="author" class="form-control" placeholder="Кто фиксирует">
+            <input type="text" name="author" class="form-control" value="{{ request.args.get('author', '') }}" placeholder="Кто фиксирует">
         </div>
         <div class="col-md-6">
             <label class="form-label fw-semibold">Координаты</label>
-            <input type="text" name="coordinates" class="form-control" placeholder="[2500:2500:0]">
+            <input type="text" name="coordinates" class="form-control" value="{{ request.args.get('coordinates', '') }}" placeholder="[2500:2500:0]">
         </div>
     </div>
+    {% if request.args.get('source_intake_id') %}
+    <input type="hidden" name="source_intake_id" value="{{ request.args.get('source_intake_id') }}">
+    <div class="small text-muted mb-2">Будет связано с входящим #{{ request.args.get('source_intake_id') }}</div>
+    {% endif %}
     <button type="submit" class="btn" style="background:var(--accent);color:#fff;">Добавить</button>
     <a href="{{ url_for('center.log') }}" class="btn btn-secondary">Отмена</a>
 </form>

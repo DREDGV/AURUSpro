@@ -61,6 +61,14 @@
         </div>
 
         {% include "_work_context.html" %}
+        {% set linked_action_title = req['title'] %}
+        {% set linked_action_description = req['description'] or req['resolution'] or '' %}
+        {% set linked_action_coordinates = req['coordinates'] or '' %}
+        {% set linked_action_source_intake_id = req['source_intake_id'] or '' %}
+        {% set linked_action_player_id = req['player_id'] or '' %}
+        {% set linked_action_assignee_id = '' %}
+        {% set linked_action_related_player = req['player_nick'] or req['assignee'] or '' %}
+        {% include "_linked_actions.html" %}
 
         {% if related_log %}
         <div class="panel mb-3">

@@ -74,6 +74,14 @@
         </div>
 
         {% include "_work_context.html" %}
+        {% set linked_action_title = decision['title'] %}
+        {% set linked_action_description = decision['description'] or decision['result'] or '' %}
+        {% set linked_action_coordinates = decision['coordinates'] or '' %}
+        {% set linked_action_source_intake_id = decision['source_intake_id'] or '' %}
+        {% set linked_action_player_id = '' %}
+        {% set linked_action_assignee_id = '' %}
+        {% set linked_action_related_player = decision['proposer'] or decision['created_by'] or '' %}
+        {% include "_linked_actions.html" %}
 
         {% if related_log %}
         <div class="panel">
