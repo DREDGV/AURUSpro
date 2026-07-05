@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Контроль альянса — AURUS{% endblock %}
+{% block page_title %}Контроль состояния альянса{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="text-muted small">
+        Единая очередь штаба: входящие, сроки, карта, заявки, решения и игроки.
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('center.index') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-grid"></i> Центр</a>
+        <a href="{{ url_for('inbox.list_items') }}" class="btn btn-sm btn-outline-info"><i class="bi bi-inbox"></i> Входящие</a>
+        <a href="{{ url_for('map.index') }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-map"></i> Карта</a>
+        <a href="{{ url_for('tasks.create') }}" class="btn btn-sm" style="background:var(--accent);color:#fff;"><i class="bi bi-plus-lg"></i> Задача</a>
+    </div>
+</div>
+
+<div class="stats-row mb-3">
+    <div class="stat-card">
+        <div class="stat-icon red"><i class="bi bi-exclamation-octagon"></i></div>
+        <div>
+            <div class="stat-value">{{ queue_stats.attention }}</div>
+            <div class="stat-label">Требует внимания</div>
+            <div class="stat-change text-danger" style="font-size:11px;">{{ queue_stats.overdue_inbox + queue_stats.overdue_tasks }} просрочено</div>
+        </div>
+    </div>
+    <div class="stat-card" style="cursor:pointer;" onclick="window.location='{{ url_for('inbox.list_items') }}'">
+        <div class="stat-icon blue"><i class="bi bi-inbox"></i></div>
+        <div>
+            <div class="stat-value">{{ queue_stats.active_inbox }}</div>
+            <div class="stat-label">Активные входящие</div>
+            <div class="stat-change" style="font-size:11px;">{{ queue_stats.map_alerts }} с координатами</div>
+        </div>
+    </div>
+    <div class="stat-card" style="cursor:pointer;" onclick="window.location='{{ url_for('tasks.list') }}'">
+        <div class="stat-icon orange"><i class="bi bi-list-check"></i></div>
+        <div>
+            <div class="stat-value">{{ queue_stats.unassigned_tasks }}</div>
+            <div class="stat-label">Без исполнителя</div>
+            <div class="stat-change" style="font-size:11px;">{{ queue_stats.overdue_tasks }} задач просрочено</div>
+        </div>
+    </div>
+    <div class="stat-card" style="cursor:pointer;" onclick="window.location='{{ url_for('map.index') }}'">
+        <div class="stat-icon cyan"><i class="bi bi-broadcast-pin"></i></div>
+        <div>
+            <div class="stat-value">{{ queue_stats.network_issues }}</div>
+            <div class="stat-label">Проблемы сети</div>
+            <div class="stat-change" style="font-size:11px;">{{ queue_stats.work_markers }} записей штаба на карте</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="bi bi-person-heart"></i></div>
+        <div>
+            <div class="stat-value">{{ queue_stats.help_players }}</div>
+            <div class="stat-label">Игроки с потребностями</div>
+        </div>
+    </div>
+</div>
+
+<div class="panel mb-3">
+    <div class="panel-header">
+        <h6><i class="bi bi-command me-2"></i>Что требует внимания сейчас</h6>
+        <span class="text-muted small">Собрано из входящих, задач, заявок и карты</span>
+    </div>
+    <div class="panel-body p-0">
+        <table class="table table-hover mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th style="width:120px;">Источник</th>
+                    <th>Ситуация</th>
+                    <th>Почему важно</th>
+                    <th style="width:210px;">Связь</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in attention_rows %}
+                <tr>
+                    <td>
+                        <span class="badge bg-{{ row.severity }}">{{ row.source }}</span>
+                    </td>
+                    <td>
+                        <a href="{{ row.url }}" class="link-accent fw-semibold">{{ row.title }}</a>
+                        {% if row.meta %}<br><small class="text-muted">{{ row.meta }}</small>{% endif %}
+                    </td>
+                    <td><small>{{ row.reason }}</small></td>
+                    <td>
+                        {% if row.coordinates %}
+                        <a href="{{ row.map_url }}" class="link-accent"><code>{{ row.coordinates }}</code></a>
+                        {% else %}
+                        <span class="text-muted small">без координат</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not attention_rows %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-4">
+                        Критичных очередей нет. Следующий шаг — разобрать обычные входящие и заявки.
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-header">
+                <h6><i class="bi bi-inbox me-2"></i>Входящие</h6>
+                <a href="{{ url_for('inbox.list_items') }}" class="btn btn-sm btn-outline-secondary">Открыть</a>
+            </div>
+            <div class="panel-body">
+                {% for item in active_inbox[:8] %}
+                <div class="mb-2 pb-2 border-bottom border-secondary">
+                    <a href="{{ url_for('inbox.detail', item_id=item['id']) }}" class="link-accent fw-semibold">
+                        {{ item['summary'] or item['raw_text'][:90] }}
+                    </a>
+                    <br><small class="text-muted">
+                        {{ item['status'] or '-' }} · {{ item['priority'] or '-' }}
+                        {% if item['due_at'] %} · до {{ item['due_at'] }}{% endif %}
+                        {% if item['auto_assignee_nick'] %} · {{ item['auto_assignee_nick'] }}{% endif %}
+                    </small>
+                </div>
+                {% endfor %}
+                {% if not active_inbox %}<div class="text-muted small">Активных входящих нет.</div>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-header">
+                <h6><i class="bi bi-map me-2"></i>Карта и координаты</h6>
+                <a href="{{ url_for('map.index') }}" class="btn btn-sm btn-outline-secondary">Открыть</a>
+            </div>
+            <div class="panel-body">
+                {% for issue in network_issues[:5] %}
+                {% set coord = '[' ~ issue.x ~ ':' ~ issue.y ~ ':' ~ (issue.z or 0) ~ ']' %}
+                <div class="mb-2 pb-2 border-bottom border-secondary">
+                    <a href="{{ url_for('map.index') }}?focus={{ coord }}" class="link-accent fw-semibold">{{ issue.name }}</a>
+                    <br><small class="text-muted">{{ issue.title }} · уровень {{ issue.level or '-' }}</small>
+                </div>
+                {% endfor %}
+                {% for alert in map_intake_alerts[:4] %}
+                <div class="mb-2 pb-2 border-bottom border-secondary">
+                    <a href="{{ alert.url }}" class="link-accent fw-semibold">{{ alert.title }}</a>
+                    <br><a href="{{ url_for('map.index') }}?focus={{ alert.coordinates }}" class="small link-accent"><code>{{ alert.coordinates }}</code></a>
+                    <small class="text-muted"> · {{ alert.priority or '-' }}{% if alert.player_nick %} · {{ alert.player_nick }}{% endif %}</small>
+                </div>
+                {% endfor %}
+                {% if not network_issues and not map_intake_alerts %}
+                <div class="text-muted small">Проблемных точек и входящих с координатами нет.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-header">
+                <h6><i class="bi bi-list-check me-2"></i>Задачи</h6>
+                <a href="{{ url_for('tasks.list') }}" class="btn btn-sm btn-outline-secondary">Открыть</a>
+            </div>
+            <div class="panel-body">
+                {% for task in overdue_tasks[:4] %}
+                <div class="mb-2 pb-2 border-bottom border-secondary">
+                    <a href="{{ url_for('tasks.detail', task_id=task['id']) }}" class="link-accent fw-semibold">{{ task['title'] }}</a>
+                    <br><small class="text-danger">Просрочено: {{ task['deadline'] }}</small>
+                    <small class="text-muted"> · {{ task['assignee_nick'] or 'не назначена' }}</small>
+                    {% if task['coordinates'] %}<br><a href="{{ url_for('map.index') }}?focus={{ task['coordinates'] }}" class="small link-accent"><code>{{ task['coordinates'] }}</code></a>{% endif %}
+                </div>
+                {% endfor %}
+                {% for task in unassigned_tasks[:4] %}
+                <div class="mb-2 pb-2 border-bottom border-secondary">
+                    <a href="{{ url_for('tasks.detail', task_id=task['id']) }}" class="link-accent fw-semibold">{{ task['title'] }}</a>
+                    <br><small class="text-muted">Без исполнителя · {{ task['priority'] or '-' }} · {{ task['direction'] or '-' }}</small>
+                    {% if task['coordinates'] %}<br><a href="{{ url_for('map.index') }}?focus={{ task['coordinates'] }}" class="small link-accent"><code>{{ task['coordinates'] }}</code></a>{% endif %}
+                </div>
+                {% endfor %}
+                {% if not overdue_tasks and not unassigned_tasks %}<div class="text-muted small">Нет просроченных и неназначенных задач.</div>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="panel h-100">
+            <div class="panel-header">
+                <h6><i class="bi bi-person-lines-fill me-2"></i>Заявки, решения, игроки</h6>
+                <a href="{{ url_for('center.requests_list') }}" class="btn btn-sm btn-outline-secondary">Заявки</a>
+            </div>
+            <div class="panel-body">
+                {% for req in open_requests[:4] %}
+                <div class="mb-2 pb-2 border-bottom border-secondary">
+                    <a href="{{ url_for('center.request_detail', request_id=req['id']) }}" class="link-accent fw-semibold">{{ req['title'] }}</a>
+                    <br><small class="text-muted">{{ req['priority'] or '-' }} · {{ req['status'] or '-' }} · {{ req['player_nick'] or 'игрок не указан' }}</small>
+                    {% if req['coordinates'] %}<br><a href="{{ url_for('map.index') }}?focus={{ req['coordinates'] }}" class="small link-accent"><code>{{ req['coordinates'] }}</code></a>{% endif %}
+                </div>
+                {% endfor %}
+                {% for decision in pending_decisions[:3] %}
+                <div class="mb-2 pb-2 border-bottom border-secondary">
+                    <a href="{{ url_for('center.decision_detail', decision_id=decision['id']) }}" class="link-accent fw-semibold">{{ decision['title'] }}</a>
+                    <br><small class="text-muted">Решение · {{ decision['status'] or '-' }} · {{ decision['priority'] or '-' }}</small>
+                    {% if decision['coordinates'] %}<br><a href="{{ url_for('map.index') }}?focus={{ decision['coordinates'] }}" class="small link-accent"><code>{{ decision['coordinates'] }}</code></a>{% endif %}
+                </div>
+                {% endfor %}
+                {% for player in help_players[:3] %}
+                <div class="mb-2 pb-2 border-bottom border-secondary">
+                    <a href="{{ url_for('players.card', player_id=player['id']) }}" class="link-accent fw-semibold">{{ player['nick'] }}</a>
+                    <br><small class="text-muted">{{ player['needs_help_with'] or player['current_activity'] or 'нужна помощь' }}</small>
+                </div>
+                {% endfor %}
+                {% if not open_requests and not pending_decisions and not help_players %}
+                <div class="text-muted small">Нет открытых заявок, решений и игроков с отмеченными потребностями.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

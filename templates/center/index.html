@@ -63,6 +63,7 @@
     <div class="panel-header">
         <h6><i class="bi bi-command me-2"></i>Требует внимания</h6>
         <div class="d-flex gap-2">
+            <a href="{{ url_for('center.control') }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-activity"></i> Контроль</a>
             <a href="{{ url_for('tasks.create') }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-plus-lg"></i> Задача</a>
             <a href="{{ url_for('inbox.list_items') }}" class="btn btn-sm btn-outline-info"><i class="bi bi-inbox"></i> Входящие</a>
             <a href="{{ url_for('center.create_request') }}" class="btn btn-sm btn-outline-secondary">Заявка</a>

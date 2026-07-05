@@ -192,6 +192,227 @@ def index():
         network_issues=network_issues)
 
 
+@center.route('/center/control')
+def control():
+    if 'user_id' not in session:
+        return redirect(url_for('auth.login'))
+    db = get_db()
+    ensure_alliance_schema(db)
+
+    overdue_inbox = db.execute(
+        """SELECT i.*, p.nick AS player_nick, ap.nick AS auto_assignee_nick
+           FROM intake_items i
+           LEFT JOIN players p ON p.id = i.source_player_id
+           LEFT JOIN players ap ON ap.id = i.auto_assignee_id
+           WHERE i.due_at IS NOT NULL
+             AND i.due_at < strftime('%Y-%m-%d %H:%M', 'now', 'localtime')
+             AND i.status NOT IN ('Обработано', 'Отклонено')
+           ORDER BY i.due_at ASC, i.created_at DESC
+           LIMIT 20"""
+    ).fetchall()
+    active_inbox = db.execute(
+        """SELECT i.*, p.nick AS player_nick, ap.nick AS auto_assignee_nick
+           FROM intake_items i
+           LEFT JOIN players p ON p.id = i.source_player_id
+           LEFT JOIN players ap ON ap.id = i.auto_assignee_id
+           WHERE i.status NOT IN ('Обработано', 'Отклонено')
+           ORDER BY
+             CASE i.priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END,
+             CASE WHEN i.due_at IS NULL OR i.due_at = '' THEN 1 ELSE 0 END,
+             i.due_at ASC,
+             i.created_at DESC
+           LIMIT 20"""
+    ).fetchall()
+    overdue_tasks = db.execute(
+        """SELECT t.*, p.nick AS assignee_nick
+           FROM tasks t
+           LEFT JOIN players p ON p.id = t.assignee_id
+           WHERE t.deadline IS NOT NULL AND t.deadline != ''
+             AND t.deadline < strftime('%Y-%m-%d %H:%M', 'now', 'localtime')
+             AND (t.status IS NULL OR t.status NOT IN ('Выполнена', 'Отменена'))
+           ORDER BY t.deadline ASC, t.created_at DESC
+           LIMIT 20"""
+    ).fetchall()
+    unassigned_tasks = db.execute(
+        """SELECT t.*, p.nick AS assignee_nick
+           FROM tasks t
+           LEFT JOIN players p ON p.id = t.assignee_id
+           WHERE (t.assignee_id IS NULL OR t.assignee_id = '')
+             AND (t.status IS NULL OR t.status NOT IN ('Выполнена', 'Отменена'))
+           ORDER BY
+             CASE t.priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END,
+             t.created_at DESC
+           LIMIT 20"""
+    ).fetchall()
+    open_requests = db.execute(
+        """SELECT r.*, p.nick AS player_nick
+           FROM requests r
+           LEFT JOIN players p ON p.id = r.player_id
+           WHERE r.status IS NULL OR r.status NOT IN ('Выполнен', 'Отклонён')
+           ORDER BY
+             CASE r.priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END,
+             CASE r.status WHEN 'Новый' THEN 0 WHEN 'В работе' THEN 1 WHEN 'На паузе' THEN 2 WHEN 'Ожидает' THEN 3 ELSE 4 END,
+             r.created_at DESC
+           LIMIT 20"""
+    ).fetchall()
+    pending_decisions = db.execute(
+        """SELECT *
+           FROM decisions
+           WHERE status IS NULL OR status NOT IN ('Выполнено', 'Отменено')
+           ORDER BY
+             CASE priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END,
+             CASE status WHEN 'Предложено' THEN 0 WHEN 'Согласовано' THEN 1 ELSE 2 END,
+             created_at DESC
+           LIMIT 20"""
+    ).fetchall()
+    help_players = db.execute(
+        """SELECT id, nick, role, direction, activity, needs_help, needs_help_with, current_activity
+           FROM players
+           WHERE needs_help = 1 OR (needs_help_with IS NOT NULL AND needs_help_with != '')
+           ORDER BY updated_at DESC, nick ASC
+           LIMIT 20"""
+    ).fetchall()
+
+    network_issues = [
+        _network_issue_payload(station)
+        for station in _existing_alstations(db)
+        if station.get('network_status') in ('signal_only', 'isolated')
+    ]
+    map_intake_alerts = _intake_alerts(db, limit=120)
+    map_work_markers = _work_markers(db, limit=120)
+
+    attention_rows = []
+
+    def add_attention(source, severity, title, reason, url, meta='', coordinates=None, map_url=None):
+        attention_rows.append({
+            'source': source,
+            'severity': severity,
+            'title': title,
+            'reason': reason,
+            'url': url,
+            'meta': meta,
+            'coordinates': coordinates,
+            'map_url': map_url or (url_for('map.index') + '?focus=' + coordinates if coordinates else None),
+        })
+
+    for item in overdue_inbox[:6]:
+        add_attention(
+            'Входящее',
+            'danger',
+            item['summary'] or (item['raw_text'] or '')[:90],
+            'Просрочено: входящее требует решения',
+            url_for('inbox.detail', item_id=item['id']),
+            '%s · %s' % (item['priority'] or '-', item['player_nick'] or 'игрок не указан'),
+        )
+    for task in overdue_tasks[:6]:
+        add_attention(
+            'Задача',
+            'danger',
+            task['title'],
+            'Просрочен срок выполнения',
+            url_for('tasks.detail', task_id=task['id']),
+            '%s · %s' % (task['priority'] or '-', task['assignee_nick'] or 'не назначена'),
+            task['coordinates'],
+        )
+    for issue in network_issues[:6]:
+        coordinates = '[%s:%s:%s]' % (issue['x'], issue['y'], issue.get('z') or 0)
+        add_attention(
+            'Карта',
+            'warning' if issue['severity'] == 'medium' else 'danger',
+            issue['name'],
+            issue['title'],
+            url_for('map.index') + '?focus=' + coordinates,
+            'ур. %s · %s' % (issue.get('level') or '-', issue.get('network_status') or '-'),
+            coordinates,
+        )
+    for req in open_requests[:5]:
+        if req['priority'] not in ('Критический', 'Высокий') and req['status'] != 'Новый':
+            continue
+        add_attention(
+            'Заявка',
+            'warning' if req['priority'] == 'Высокий' else 'danger',
+            req['title'],
+            'Заявка без закрытого решения',
+            url_for('center.request_detail', request_id=req['id']),
+            '%s · %s · %s' % (req['priority'] or '-', req['status'] or '-', req['player_nick'] or 'игрок не указан'),
+            req['coordinates'],
+        )
+    for task in unassigned_tasks[:4]:
+        add_attention(
+            'Назначение',
+            'info',
+            task['title'],
+            'Задача без исполнителя',
+            url_for('tasks.detail', task_id=task['id']),
+            '%s · %s' % (task['priority'] or '-', task['direction'] or 'направление не указано'),
+            task['coordinates'],
+        )
+    for alert in map_intake_alerts[:4]:
+        add_attention(
+            'Координаты',
+            'info',
+            alert['title'],
+            'Входящее с координатами видно на карте',
+            alert['url'],
+            '%s · %s' % (alert.get('priority') or '-', alert.get('player_nick') or 'игрок не указан'),
+            alert['coordinates'],
+        )
+
+    queue_stats = {
+        'active_inbox': db.execute(
+            "SELECT COUNT(*) FROM intake_items WHERE status NOT IN ('Обработано', 'Отклонено')"
+        ).fetchone()[0],
+        'overdue_inbox': db.execute(
+            """SELECT COUNT(*) FROM intake_items
+               WHERE due_at IS NOT NULL
+                 AND due_at < strftime('%Y-%m-%d %H:%M', 'now', 'localtime')
+                 AND status NOT IN ('Обработано', 'Отклонено')"""
+        ).fetchone()[0],
+        'overdue_tasks': db.execute(
+            """SELECT COUNT(*) FROM tasks
+               WHERE deadline IS NOT NULL AND deadline != ''
+                 AND deadline < strftime('%Y-%m-%d %H:%M', 'now', 'localtime')
+                 AND (status IS NULL OR status NOT IN ('Выполнена', 'Отменена'))"""
+        ).fetchone()[0],
+        'unassigned_tasks': db.execute(
+            """SELECT COUNT(*) FROM tasks
+               WHERE (assignee_id IS NULL OR assignee_id = '')
+                 AND (status IS NULL OR status NOT IN ('Выполнена', 'Отменена'))"""
+        ).fetchone()[0],
+        'open_requests': db.execute(
+            "SELECT COUNT(*) FROM requests WHERE status IS NULL OR status NOT IN ('Выполнен', 'Отклонён')"
+        ).fetchone()[0],
+        'pending_decisions': db.execute(
+            "SELECT COUNT(*) FROM decisions WHERE status IS NULL OR status NOT IN ('Выполнено', 'Отменено')"
+        ).fetchone()[0],
+        'help_players': db.execute(
+            """SELECT COUNT(*) FROM players
+               WHERE needs_help = 1 OR (needs_help_with IS NOT NULL AND needs_help_with != '')"""
+        ).fetchone()[0],
+        'network_issues': len(network_issues),
+        'map_alerts': len(map_intake_alerts),
+        'work_markers': len(map_work_markers),
+        'attention': len(attention_rows),
+    }
+
+    db.close()
+    return render_template(
+        'center/control.html',
+        queue_stats=queue_stats,
+        attention_rows=attention_rows,
+        active_inbox=active_inbox,
+        overdue_inbox=overdue_inbox,
+        overdue_tasks=overdue_tasks,
+        unassigned_tasks=unassigned_tasks,
+        open_requests=open_requests,
+        pending_decisions=pending_decisions,
+        help_players=help_players,
+        network_issues=network_issues,
+        map_intake_alerts=map_intake_alerts,
+        map_work_markers=map_work_markers,
+    )
+
+
 @center.route('/center/decisions')
 def decisions():
     if 'user_id' not in session:
