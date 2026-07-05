@@ -123,7 +123,9 @@ def list():
     if type_filter:
         q += ' AND t.task_type = ?'
         params.append(type_filter)
-    if assignee_filter:
+    if assignee_filter == 'none':
+        q += " AND (t.assignee_id IS NULL OR t.assignee_id = '')"
+    elif assignee_filter:
         q += ' AND t.assignee_id = ?'
         params.append(assignee_filter)
     q += f' ORDER BY {_priority_order_sql()}, {_status_order_sql()}, t.created_at DESC'

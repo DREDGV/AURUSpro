@@ -205,6 +205,11 @@ def index():
     active_inbox_count = db.execute(
         "SELECT COUNT(*) FROM intake_items WHERE status NOT IN ('Обработано', 'Отклонено')"
     ).fetchone()[0]
+    unassigned_inbox_count = db.execute(
+        """SELECT COUNT(*) FROM intake_items
+           WHERE (auto_assignee_id IS NULL OR auto_assignee_id = '')
+             AND status NOT IN ('Обработано', 'Отклонено')"""
+    ).fetchone()[0]
     open_requests_count = db.execute(
         "SELECT COUNT(*) FROM requests WHERE status IS NULL OR status NOT IN ('Выполнен', 'Отклонён')"
     ).fetchone()[0]
@@ -236,10 +241,10 @@ def index():
         },
         {
             'title': 'Исполнители',
-            'value': unassigned_tasks_count,
-            'detail': 'задач без ответственного',
-            'severity': 'warning' if unassigned_tasks_count else 'ok',
-            'url': url_for('tasks.list'),
+            'value': unassigned_tasks_count + unassigned_inbox_count,
+            'detail': '%s задач · %s входящих без ответственного' % (unassigned_tasks_count, unassigned_inbox_count),
+            'severity': 'warning' if unassigned_tasks_count + unassigned_inbox_count else 'ok',
+            'url': url_for('tasks.list', assignee_id='none'),
             'icon': 'bi-person-exclamation',
         },
         {
@@ -257,6 +262,81 @@ def index():
             'severity': 'danger' if network_issues else ('info' if coordinate_work_count else 'ok'),
             'url': url_for('map.index'),
             'icon': 'bi-map',
+        },
+    ]
+    leader_focus = [
+        {
+            'title': 'Решить лично',
+            'value': len(pending_requests) + pending_decisions_count,
+            'detail': '%s новых заявок · %s решений в работе' % (len(pending_requests), pending_decisions_count),
+            'severity': 'danger' if pending_requests else ('warning' if pending_decisions_count else 'ok'),
+            'icon': 'bi-gavel',
+            'url': url_for('center.requests_list', status='Новый'),
+            'actions': [
+                {'label': 'Заявки', 'url': url_for('center.requests_list', status='Новый')},
+                {'label': 'Решения', 'url': url_for('center.decisions', status='Предложено')},
+            ],
+        },
+        {
+            'title': 'Делегировать',
+            'value': unassigned_tasks_count + unassigned_inbox_count,
+            'detail': '%s задач · %s входящих без ответственного' % (unassigned_tasks_count, unassigned_inbox_count),
+            'severity': 'warning' if unassigned_tasks_count + unassigned_inbox_count else 'ok',
+            'icon': 'bi-diagram-3',
+            'url': url_for('tasks.list', assignee_id='none'),
+            'actions': [
+                {'label': 'Задачи', 'url': url_for('tasks.list', assignee_id='none')},
+                {'label': 'Входящие', 'url': url_for('inbox.list_items', view='unassigned')},
+            ],
+        },
+        {
+            'title': 'Контроль времени',
+            'value': overdue_inbox + overdue_tasks,
+            'detail': '%s входящих · %s задач просрочено' % (overdue_inbox, overdue_tasks),
+            'severity': 'danger' if overdue_inbox + overdue_tasks else 'ok',
+            'icon': 'bi-stopwatch',
+            'url': url_for('center.control'),
+            'actions': [
+                {'label': 'Контроль', 'url': url_for('center.control')},
+                {'label': 'Просроченные входящие', 'url': url_for('inbox.list_items', view='overdue')},
+            ],
+        },
+        {
+            'title': 'Риски карты',
+            'value': len(network_issues) + coordinate_work_count,
+            'detail': '%s проблем сети · %s координатных записей' % (len(network_issues), coordinate_work_count),
+            'severity': 'danger' if network_issues else ('info' if coordinate_work_count else 'ok'),
+            'icon': 'bi-radar',
+            'url': url_for('map.index'),
+            'actions': [
+                {'label': 'Карта', 'url': url_for('map.index')},
+                {'label': 'Задачи карты', 'url': url_for('tasks.list', direction='Алстанции')},
+            ],
+        },
+        {
+            'title': 'Игроки внимания',
+            'value': len(help_needed) + unanswered_count,
+            'detail': '%s просят помощь · %s без анкеты' % (len(help_needed), unanswered_count),
+            'severity': 'warning' if help_needed else ('info' if unanswered_count else 'ok'),
+            'icon': 'bi-person-lines-fill',
+            'url': url_for('players.list'),
+            'actions': [
+                {'label': 'Игроки', 'url': url_for('players.list')},
+                {'label': 'Анкеты', 'url': url_for('questionnaires.list')},
+            ],
+        },
+        {
+            'title': 'Быстрый ввод',
+            'value': inbox_new + inbox_pending,
+            'detail': '%s новых · %s ждут подтверждения' % (inbox_new, inbox_pending),
+            'severity': 'warning' if inbox_new + inbox_pending else 'ok',
+            'icon': 'bi-lightning-charge',
+            'url': url_for('inbox.list_items'),
+            'actions': [
+                {'label': 'Входящие', 'url': url_for('inbox.list_items')},
+                {'label': 'Журнал', 'url': url_for('center.create_log')},
+            ],
+            'quick_create': 'intake',
         },
     ]
     today_focus = []
@@ -319,6 +399,7 @@ def index():
         map_work_markers=map_work_markers,
         quick_players=quick_players,
         command_health=command_health,
+        leader_focus=leader_focus,
         today_focus=today_focus[:5],
         network_issues=network_issues)
 

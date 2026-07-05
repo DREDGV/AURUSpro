@@ -61,6 +61,49 @@
 
 <div class="panel mb-3">
     <div class="panel-header">
+        <h6><i class="bi bi-shield-check me-2"></i>Панель главы альянса</h6>
+        <span class="text-muted small">личные решения, делегирование, сроки, карта и игроки</span>
+    </div>
+    <div class="panel-body">
+        <div class="row g-2">
+            {% for item in leader_focus %}
+            <div class="col-xl-4 col-md-6">
+                <div class="command-link-card p-3 rounded h-100">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                            <a href="{{ item.url }}" class="text-decoration-none text-reset fw-semibold" title="Открыть: {{ item.title }}">
+                                {{ item.title }}
+                            </a>
+                            <div class="fs-3 fw-bold {% if item.severity == 'danger' %}text-danger{% elif item.severity == 'warning' %}text-warning{% elif item.severity == 'info' %}text-info{% else %}text-success{% endif %}">
+                                {{ item.value }}
+                            </div>
+                        </div>
+                        <a href="{{ item.url }}" class="btn btn-sm btn-light" title="Открыть: {{ item.title }}">
+                            <i class="bi {{ item.icon }}"></i>
+                        </a>
+                    </div>
+                    <div class="small text-muted mt-1">{{ item.detail }}</div>
+                    <div class="d-flex flex-wrap gap-2 mt-3">
+                        {% if item.quick_create %}
+                        <button type="button" class="btn btn-sm btn-primary" onclick="showQuickCreate('{{ item.quick_create }}')">
+                            <i class="bi bi-plus-lg"></i> Ввести
+                        </button>
+                        {% endif %}
+                        {% for action in item.actions %}
+                        <a href="{{ action.url }}" class="btn btn-sm {% if item.severity == 'danger' %}btn-outline-danger{% elif item.severity == 'warning' %}btn-outline-warning{% elif item.severity == 'info' %}btn-outline-info{% else %}btn-outline-secondary{% endif %}">
+                            {{ action.label }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="panel mb-3">
+    <div class="panel-header">
         <h6><i class="bi bi-activity me-2"></i>Состояние штаба</h6>
         <span class="text-muted small">входящие, сроки, исполнители, заявки и карта</span>
     </div>
