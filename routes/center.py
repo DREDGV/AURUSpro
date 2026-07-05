@@ -69,6 +69,38 @@ def _log_decision_event(db, decision, title, description, event_type='Решен
     )
 
 
+def _log_control_event(
+    db,
+    event_type,
+    title,
+    description,
+    coordinates=None,
+    related_player=None,
+    source_intake_id=None,
+    related_task_id=None,
+    related_request_id=None,
+    related_decision_id=None,
+):
+    db.execute(
+        '''INSERT INTO alliance_log (event_type, title, description, related_player, author, event_date,
+           coordinates, source_intake_id, related_task_id, related_request_id, related_decision_id)
+           VALUES (?, ?, ?, ?, ?, date('now'), ?, ?, ?, ?, ?)''',
+        (
+            event_type,
+            title,
+            description,
+            related_player,
+            session.get('username'),
+            coordinates,
+            source_intake_id,
+            related_task_id,
+            related_request_id,
+            related_decision_id,
+        ),
+    )
+    return db.execute('SELECT last_insert_rowid()').fetchone()[0]
+
+
 @center.route('/center')
 def index():
     if 'user_id' not in session:
@@ -711,6 +743,243 @@ def scan_profiles():
 @center.route('/center/scan/<int:player_id>', methods=['POST'])
 def scan_player(player_id):
     return jsonify({'error': 'Автопарсинг отключён. Вводите данные вручную.'}), 403
+
+
+@center.route('/center/ajax/control-action', methods=['POST'])
+def ajax_control_action():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Auth required'}), 401
+    data = request.get_json() or {}
+    source = data.get('source')
+    action = data.get('action')
+    item_id = data.get('id')
+    if not source or not action or item_id is None:
+        return jsonify({'error': 'Missing action data'}), 400
+
+    db = get_db()
+    ensure_alliance_schema(db)
+
+    try:
+        item_id = int(item_id)
+    except (TypeError, ValueError):
+        db.close()
+        return jsonify({'error': 'Invalid id'}), 400
+
+    if source == 'inbox':
+        statuses = {
+            'start': 'В работе',
+            'done': 'Обработано',
+            'reject': 'Отклонено',
+        }
+        new_status = statuses.get(action)
+        if not new_status:
+            db.close()
+            return jsonify({'error': 'Invalid inbox action'}), 400
+        item = db.execute(
+            '''SELECT i.*, p.nick AS player_nick
+               FROM intake_items i
+               LEFT JOIN players p ON p.id = i.source_player_id
+               WHERE i.id = ?''',
+            (item_id,),
+        ).fetchone()
+        if not item:
+            db.close()
+            return jsonify({'error': 'Inbox item not found'}), 404
+        db.execute(
+            'UPDATE intake_items SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+            (new_status, item_id),
+        )
+        log_id = _log_control_event(
+            db,
+            'Входящее',
+            'Изменён статус входящего #%d' % item_id,
+            '%s -> %s: %s' % (item['status'] or '-', new_status, item['summary'] or (item['raw_text'] or '')[:120]),
+            related_player=item['player_nick'],
+            source_intake_id=item_id,
+        )
+        _link_intake(db, item_id, 'log', log_id, 'control_status')
+        db.commit()
+        db.close()
+        return jsonify({'status': 'ok', 'new_status': new_status})
+
+    if source == 'task':
+        statuses = {
+            'start': 'В работе',
+            'wait': 'Ожидает',
+            'done': 'Выполнена',
+            'cancel': 'Отменена',
+        }
+        new_status = statuses.get(action)
+        if not new_status:
+            db.close()
+            return jsonify({'error': 'Invalid task action'}), 400
+        task = db.execute(
+            '''SELECT t.*, p.nick AS assignee_nick
+               FROM tasks t LEFT JOIN players p ON p.id = t.assignee_id
+               WHERE t.id = ?''',
+            (item_id,),
+        ).fetchone()
+        if not task:
+            db.close()
+            return jsonify({'error': 'Task not found'}), 404
+        if new_status == 'Выполнена':
+            db.execute(
+                'UPDATE tasks SET status=?, closed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+                (new_status, item_id),
+            )
+        else:
+            db.execute(
+                'UPDATE tasks SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+                (new_status, item_id),
+            )
+        _log_control_event(
+            db,
+            'Задача',
+            'Изменён статус задачи',
+            '%s: %s -> %s' % (task['title'], task['status'] or '-', new_status),
+            coordinates=task['coordinates'],
+            related_player=task['assignee_nick'],
+            source_intake_id=task['source_intake_id'] if 'source_intake_id' in task.keys() else None,
+            related_task_id=item_id,
+        )
+        db.commit()
+        db.close()
+        return jsonify({'status': 'ok', 'new_status': new_status})
+
+    if source == 'request':
+        statuses = {
+            'start': 'В работе',
+            'wait': 'Ожидает',
+            'hold': 'На паузе',
+            'done': 'Выполнен',
+            'reject': 'Отклонён',
+        }
+        new_status = statuses.get(action)
+        if not new_status:
+            db.close()
+            return jsonify({'error': 'Invalid request action'}), 400
+        req = db.execute(
+            '''SELECT r.*, p.nick AS player_nick
+               FROM requests r LEFT JOIN players p ON p.id = r.player_id
+               WHERE r.id = ?''',
+            (item_id,),
+        ).fetchone()
+        if not req:
+            db.close()
+            return jsonify({'error': 'Request not found'}), 404
+        if new_status in ('Выполнен', 'Отклонён'):
+            db.execute(
+                'UPDATE requests SET status=?, resolved_at=CURRENT_TIMESTAMP WHERE id=?',
+                (new_status, item_id),
+            )
+        else:
+            db.execute('UPDATE requests SET status=? WHERE id=?', (new_status, item_id))
+        updated = db.execute(
+            '''SELECT r.*, p.nick AS player_nick
+               FROM requests r LEFT JOIN players p ON p.id = r.player_id
+               WHERE r.id = ?''',
+            (item_id,),
+        ).fetchone()
+        _log_request_event(
+            db,
+            updated,
+            'Изменён статус заявки',
+            '%s: %s -> %s' % (updated['title'], req['status'] or '-', new_status),
+        )
+        db.commit()
+        db.close()
+        return jsonify({'status': 'ok', 'new_status': new_status})
+
+    if source == 'decision':
+        statuses = {
+            'agree': 'Согласовано',
+            'done': 'Выполнено',
+            'cancel': 'Отменено',
+        }
+        new_status = statuses.get(action)
+        if not new_status:
+            db.close()
+            return jsonify({'error': 'Invalid decision action'}), 400
+        decision = db.execute('SELECT * FROM decisions WHERE id = ?', (item_id,)).fetchone()
+        if not decision:
+            db.close()
+            return jsonify({'error': 'Decision not found'}), 404
+        db.execute(
+            'UPDATE decisions SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+            (new_status, item_id),
+        )
+        updated = db.execute('SELECT * FROM decisions WHERE id = ?', (item_id,)).fetchone()
+        _log_decision_event(
+            db,
+            updated,
+            'Изменён статус решения',
+            '%s: %s -> %s' % (updated['title'], decision['status'] or '-', new_status),
+        )
+        db.commit()
+        db.close()
+        return jsonify({'status': 'ok', 'new_status': new_status})
+
+    if source == 'network_issue' and action == 'create_task':
+        station = db.execute(
+            '''SELECT id, name, object_type, coordinates, level
+               FROM game_objects
+               WHERE id = ?''',
+            (item_id,),
+        ).fetchone()
+        if not station:
+            db.close()
+            return jsonify({'error': 'Station not found'}), 404
+        if not station['coordinates']:
+            db.close()
+            return jsonify({'error': 'Station has no coordinates'}), 400
+        title = 'Проверить связь алстанции: %s' % (station['name'] or station['coordinates'])
+        existing = db.execute(
+            '''SELECT id FROM tasks
+               WHERE task_type = 'check_network'
+                 AND coordinates = ?
+                 AND (status IS NULL OR status NOT IN ('Выполнена', 'Отменена'))
+               ORDER BY created_at DESC
+               LIMIT 1''',
+            (station['coordinates'],),
+        ).fetchone()
+        if existing:
+            db.close()
+            return jsonify({
+                'status': 'ok',
+                'message': 'Задача уже существует',
+                'url': url_for('tasks.detail', task_id=existing['id']),
+            })
+        db.execute(
+            '''INSERT INTO tasks (title, direction, description, priority, status, coordinates,
+               map_object_id, map_object_type, task_type, comment, updated_at)
+               VALUES (?, 'Алстанции', ?, 'Высокий', 'Новая', ?, ?, 'alstation', 'check_network', ?, CURRENT_TIMESTAMP)''',
+            (
+                title,
+                'Создано из контроля сети. Нужно проверить, почему алстанция не даёт общую сеть или работает автономно.',
+                station['coordinates'],
+                station['id'],
+                'Автозадача из Центра контроля; уровень алстанции: %s' % (station['level'] or '-'),
+            ),
+        )
+        task_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        _log_control_event(
+            db,
+            'Карта',
+            'Создана задача проверки алстанции',
+            title,
+            coordinates=station['coordinates'],
+            related_task_id=task_id,
+        )
+        db.commit()
+        db.close()
+        return jsonify({
+            'status': 'ok',
+            'message': 'Задача создана',
+            'url': url_for('tasks.detail', task_id=task_id),
+        })
+
+    db.close()
+    return jsonify({'error': 'Unsupported control action'}), 400
 
 
 @center.route('/center/ajax/request/<int:request_id>/status', methods=['POST'])

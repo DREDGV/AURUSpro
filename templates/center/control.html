@@ -114,14 +114,22 @@
             <div class="panel-body">
                 {% for item in active_inbox[:8] %}
                 <div class="mb-2 pb-2 border-bottom border-secondary">
-                    <a href="{{ url_for('inbox.detail', item_id=item['id']) }}" class="link-accent fw-semibold">
-                        {{ item['summary'] or item['raw_text'][:90] }}
-                    </a>
-                    <br><small class="text-muted">
-                        {{ item['status'] or '-' }} · {{ item['priority'] or '-' }}
-                        {% if item['due_at'] %} · до {{ item['due_at'] }}{% endif %}
-                        {% if item['auto_assignee_nick'] %} · {{ item['auto_assignee_nick'] }}{% endif %}
-                    </small>
+                    <div class="d-flex justify-content-between gap-2">
+                        <div>
+                            <a href="{{ url_for('inbox.detail', item_id=item['id']) }}" class="link-accent fw-semibold">
+                                {{ item['summary'] or item['raw_text'][:90] }}
+                            </a>
+                            <br><small class="text-muted">
+                                {{ item['status'] or '-' }} · {{ item['priority'] or '-' }}
+                                {% if item['due_at'] %} · до {{ item['due_at'] }}{% endif %}
+                                {% if item['auto_assignee_nick'] %} · {{ item['auto_assignee_nick'] }}{% endif %}
+                            </small>
+                        </div>
+                        <div class="btn-group btn-group-sm flex-shrink-0">
+                            <button class="btn btn-outline-primary control-action" title="В работу" data-source="inbox" data-id="{{ item['id'] }}" data-action="start"><i class="bi bi-play-fill"></i></button>
+                            <button class="btn btn-outline-success control-action" title="Обработано" data-source="inbox" data-id="{{ item['id'] }}" data-action="done"><i class="bi bi-check2"></i></button>
+                        </div>
+                    </div>
                 </div>
                 {% endfor %}
                 {% if not active_inbox %}<div class="text-muted small">Активных входящих нет.</div>{% endif %}
@@ -139,8 +147,15 @@
                 {% for issue in network_issues[:5] %}
                 {% set coord = '[' ~ issue.x ~ ':' ~ issue.y ~ ':' ~ (issue.z or 0) ~ ']' %}
                 <div class="mb-2 pb-2 border-bottom border-secondary">
-                    <a href="{{ url_for('map.index') }}?focus={{ coord }}" class="link-accent fw-semibold">{{ issue.name }}</a>
-                    <br><small class="text-muted">{{ issue.title }} · уровень {{ issue.level or '-' }}</small>
+                    <div class="d-flex justify-content-between gap-2">
+                        <div>
+                            <a href="{{ url_for('map.index') }}?focus={{ coord }}" class="link-accent fw-semibold">{{ issue.name }}</a>
+                            <br><small class="text-muted">{{ issue.title }} · уровень {{ issue.level or '-' }}</small>
+                        </div>
+                        <button class="btn btn-sm btn-outline-warning control-action flex-shrink-0" title="Создать задачу проверки сети" data-source="network_issue" data-id="{{ issue.id }}" data-action="create_task">
+                            <i class="bi bi-list-check"></i>
+                        </button>
+                    </div>
                 </div>
                 {% endfor %}
                 {% for alert in map_intake_alerts[:4] %}
@@ -166,17 +181,34 @@
             <div class="panel-body">
                 {% for task in overdue_tasks[:4] %}
                 <div class="mb-2 pb-2 border-bottom border-secondary">
-                    <a href="{{ url_for('tasks.detail', task_id=task['id']) }}" class="link-accent fw-semibold">{{ task['title'] }}</a>
-                    <br><small class="text-danger">Просрочено: {{ task['deadline'] }}</small>
-                    <small class="text-muted"> · {{ task['assignee_nick'] or 'не назначена' }}</small>
-                    {% if task['coordinates'] %}<br><a href="{{ url_for('map.index') }}?focus={{ task['coordinates'] }}" class="small link-accent"><code>{{ task['coordinates'] }}</code></a>{% endif %}
+                    <div class="d-flex justify-content-between gap-2">
+                        <div>
+                            <a href="{{ url_for('tasks.detail', task_id=task['id']) }}" class="link-accent fw-semibold">{{ task['title'] }}</a>
+                            <br><small class="text-danger">Просрочено: {{ task['deadline'] }}</small>
+                            <small class="text-muted"> · {{ task['assignee_nick'] or 'не назначена' }}</small>
+                            {% if task['coordinates'] %}<br><a href="{{ url_for('map.index') }}?focus={{ task['coordinates'] }}" class="small link-accent"><code>{{ task['coordinates'] }}</code></a>{% endif %}
+                        </div>
+                        <div class="btn-group btn-group-sm flex-shrink-0">
+                            <button class="btn btn-outline-primary control-action" title="В работу" data-source="task" data-id="{{ task['id'] }}" data-action="start"><i class="bi bi-play-fill"></i></button>
+                            <button class="btn btn-outline-secondary control-action" title="Ожидает" data-source="task" data-id="{{ task['id'] }}" data-action="wait"><i class="bi bi-hourglass-split"></i></button>
+                            <button class="btn btn-outline-success control-action" title="Выполнена" data-source="task" data-id="{{ task['id'] }}" data-action="done"><i class="bi bi-check2"></i></button>
+                        </div>
+                    </div>
                 </div>
                 {% endfor %}
                 {% for task in unassigned_tasks[:4] %}
                 <div class="mb-2 pb-2 border-bottom border-secondary">
-                    <a href="{{ url_for('tasks.detail', task_id=task['id']) }}" class="link-accent fw-semibold">{{ task['title'] }}</a>
-                    <br><small class="text-muted">Без исполнителя · {{ task['priority'] or '-' }} · {{ task['direction'] or '-' }}</small>
-                    {% if task['coordinates'] %}<br><a href="{{ url_for('map.index') }}?focus={{ task['coordinates'] }}" class="small link-accent"><code>{{ task['coordinates'] }}</code></a>{% endif %}
+                    <div class="d-flex justify-content-between gap-2">
+                        <div>
+                            <a href="{{ url_for('tasks.detail', task_id=task['id']) }}" class="link-accent fw-semibold">{{ task['title'] }}</a>
+                            <br><small class="text-muted">Без исполнителя · {{ task['priority'] or '-' }} · {{ task['direction'] or '-' }}</small>
+                            {% if task['coordinates'] %}<br><a href="{{ url_for('map.index') }}?focus={{ task['coordinates'] }}" class="small link-accent"><code>{{ task['coordinates'] }}</code></a>{% endif %}
+                        </div>
+                        <div class="btn-group btn-group-sm flex-shrink-0">
+                            <button class="btn btn-outline-primary control-action" title="В работу" data-source="task" data-id="{{ task['id'] }}" data-action="start"><i class="bi bi-play-fill"></i></button>
+                            <button class="btn btn-outline-success control-action" title="Выполнена" data-source="task" data-id="{{ task['id'] }}" data-action="done"><i class="bi bi-check2"></i></button>
+                        </div>
+                    </div>
                 </div>
                 {% endfor %}
                 {% if not overdue_tasks and not unassigned_tasks %}<div class="text-muted small">Нет просроченных и неназначенных задач.</div>{% endif %}
@@ -193,16 +225,33 @@
             <div class="panel-body">
                 {% for req in open_requests[:4] %}
                 <div class="mb-2 pb-2 border-bottom border-secondary">
-                    <a href="{{ url_for('center.request_detail', request_id=req['id']) }}" class="link-accent fw-semibold">{{ req['title'] }}</a>
-                    <br><small class="text-muted">{{ req['priority'] or '-' }} · {{ req['status'] or '-' }} · {{ req['player_nick'] or 'игрок не указан' }}</small>
-                    {% if req['coordinates'] %}<br><a href="{{ url_for('map.index') }}?focus={{ req['coordinates'] }}" class="small link-accent"><code>{{ req['coordinates'] }}</code></a>{% endif %}
+                    <div class="d-flex justify-content-between gap-2">
+                        <div>
+                            <a href="{{ url_for('center.request_detail', request_id=req['id']) }}" class="link-accent fw-semibold">{{ req['title'] }}</a>
+                            <br><small class="text-muted">{{ req['priority'] or '-' }} · {{ req['status'] or '-' }} · {{ req['player_nick'] or 'игрок не указан' }}</small>
+                            {% if req['coordinates'] %}<br><a href="{{ url_for('map.index') }}?focus={{ req['coordinates'] }}" class="small link-accent"><code>{{ req['coordinates'] }}</code></a>{% endif %}
+                        </div>
+                        <div class="btn-group btn-group-sm flex-shrink-0">
+                            <button class="btn btn-outline-primary control-action" title="В работу" data-source="request" data-id="{{ req['id'] }}" data-action="start"><i class="bi bi-play-fill"></i></button>
+                            <button class="btn btn-outline-secondary control-action" title="Ожидает" data-source="request" data-id="{{ req['id'] }}" data-action="wait"><i class="bi bi-hourglass-split"></i></button>
+                            <button class="btn btn-outline-success control-action" title="Выполнен" data-source="request" data-id="{{ req['id'] }}" data-action="done"><i class="bi bi-check2"></i></button>
+                        </div>
+                    </div>
                 </div>
                 {% endfor %}
                 {% for decision in pending_decisions[:3] %}
                 <div class="mb-2 pb-2 border-bottom border-secondary">
-                    <a href="{{ url_for('center.decision_detail', decision_id=decision['id']) }}" class="link-accent fw-semibold">{{ decision['title'] }}</a>
-                    <br><small class="text-muted">Решение · {{ decision['status'] or '-' }} · {{ decision['priority'] or '-' }}</small>
-                    {% if decision['coordinates'] %}<br><a href="{{ url_for('map.index') }}?focus={{ decision['coordinates'] }}" class="small link-accent"><code>{{ decision['coordinates'] }}</code></a>{% endif %}
+                    <div class="d-flex justify-content-between gap-2">
+                        <div>
+                            <a href="{{ url_for('center.decision_detail', decision_id=decision['id']) }}" class="link-accent fw-semibold">{{ decision['title'] }}</a>
+                            <br><small class="text-muted">Решение · {{ decision['status'] or '-' }} · {{ decision['priority'] or '-' }}</small>
+                            {% if decision['coordinates'] %}<br><a href="{{ url_for('map.index') }}?focus={{ decision['coordinates'] }}" class="small link-accent"><code>{{ decision['coordinates'] }}</code></a>{% endif %}
+                        </div>
+                        <div class="btn-group btn-group-sm flex-shrink-0">
+                            <button class="btn btn-outline-warning control-action" title="Согласовано" data-source="decision" data-id="{{ decision['id'] }}" data-action="agree"><i class="bi bi-hand-thumbs-up"></i></button>
+                            <button class="btn btn-outline-success control-action" title="Выполнено" data-source="decision" data-id="{{ decision['id'] }}" data-action="done"><i class="bi bi-check2"></i></button>
+                        </div>
+                    </div>
                 </div>
                 {% endfor %}
                 {% for player in help_players[:3] %}
@@ -219,4 +268,40 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.control-action').forEach(function(button) {
+    button.addEventListener('click', function() {
+        if (button.disabled) return;
+        var payload = {
+            source: button.dataset.source,
+            id: button.dataset.id,
+            action: button.dataset.action
+        };
+        button.disabled = true;
+        fetch('{{ url_for("center.ajax_control_action") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        })
+        .then(function(response) { return response.json().then(function(data) { return {ok: response.ok, data: data}; }); })
+        .then(function(result) {
+            if (!result.ok || result.data.error) {
+                throw new Error(result.data.error || 'Не удалось выполнить действие');
+            }
+            if (result.data.url && payload.source === 'network_issue') {
+                window.location = result.data.url;
+                return;
+            }
+            window.location.reload();
+        })
+        .catch(function(error) {
+            button.disabled = false;
+            alert(error.message);
+        });
+    });
+});
+</script>
 {% endblock %}
