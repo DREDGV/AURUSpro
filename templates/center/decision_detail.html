@@ -75,7 +75,10 @@
                         <tr>
                             <td><small class="text-muted">{{ e['event_date'] or '' }}</small></td>
                             <td><span class="badge bg-secondary" style="font-size:10px;">{{ e['event_type'] }}</span></td>
-                            <td><strong>{{ e['title'] }}</strong></td>
+                            <td>
+                                <strong>{{ e['title'] }}</strong>
+                                {% if e['description'] %}<br><small class="text-muted">{{ e['description'] }}</small>{% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>

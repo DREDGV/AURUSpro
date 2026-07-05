@@ -55,6 +55,30 @@
             </div>
         </div>
 
+        {% if related_log %}
+        <div class="panel mb-3">
+            <div class="panel-header">
+                <h6>Связанные события</h6>
+            </div>
+            <div class="panel-body p-0">
+                <table class="table table-hover mb-0">
+                    <tbody>
+                        {% for e in related_log %}
+                        <tr>
+                            <td style="width:110px;"><small class="text-muted">{{ e['event_date'] or e['created_at'][:10] }}</small></td>
+                            <td style="width:110px;"><span class="badge bg-secondary" style="font-size:10px;">{{ e['event_type'] }}</span></td>
+                            <td>
+                                <strong>{{ e['title'] }}</strong>
+                                {% if e['description'] %}<br><small class="text-muted">{{ e['description'] }}</small>{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
         <div class="panel mb-3">
             <div class="panel-header">
                 <h6>Комментарии ({{ comments|length }})</h6>

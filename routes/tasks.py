@@ -15,6 +15,42 @@ TASK_STATUSES = ['Новая', 'В работе', 'Ожидает', 'Выпол�
 TASK_PRIORITIES = ['Критический', 'Высокий', 'Средний', 'Низкий']
 
 
+def _link_intake(db, source_intake_id, target_type, target_id, relation):
+    if not source_intake_id:
+        return
+    db.execute(
+        '''INSERT INTO work_links (source_type, source_id, target_type, target_id, relation)
+           VALUES ('intake', ?, ?, ?, ?)''',
+        (source_intake_id, target_type, target_id, relation),
+    )
+
+
+def _log_task_event(db, task, title, description, event_type='Задача'):
+    db.execute(
+        '''INSERT INTO alliance_log (event_type, title, description, related_player, author, event_date,
+           coordinates, source_intake_id, related_task_id)
+           VALUES (?, ?, ?, ?, ?, date('now'), ?, ?, ?)''',
+        (
+            event_type,
+            title,
+            description,
+            task['assignee_nick'] if 'assignee_nick' in task.keys() else None,
+            session.get('username'),
+            task['coordinates'] if 'coordinates' in task.keys() else None,
+            task['source_intake_id'] if 'source_intake_id' in task.keys() else None,
+            task['id'],
+        ),
+    )
+    log_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+    _link_intake(
+        db,
+        task['source_intake_id'] if 'source_intake_id' in task.keys() else None,
+        'log',
+        log_id,
+        'task_event',
+    )
+
+
 def _status_order_sql(alias='t'):
     return (
         f"CASE {alias}.status "
@@ -145,10 +181,17 @@ def create():
                 data.get('task_type') or 'other',
             ),
         )
+        task_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        row = db.execute(
+            '''SELECT t.*, p.nick as assignee_nick
+               FROM tasks t LEFT JOIN players p ON t.assignee_id = p.id WHERE t.id = ?''',
+            (task_id,),
+        ).fetchone()
+        _log_task_event(db, row, 'Создана задача', row['title'], event_type='Создание')
         db.commit()
         db.close()
         flash('Задача создана', 'success')
-        return redirect(url_for('tasks.list'))
+        return redirect(url_for('tasks.detail', task_id=task_id))
     players = db.execute('SELECT id, nick FROM players ORDER BY nick').fetchall()
     db.close()
     return render_template(
@@ -180,8 +223,14 @@ def detail(task_id):
         'SELECT * FROM task_comments WHERE task_id = ? ORDER BY created_at ASC',
         (task_id,),
     ).fetchall()
+    related_log = db.execute(
+        '''SELECT * FROM alliance_log
+           WHERE related_task_id = ? OR (source_intake_id IS NOT NULL AND source_intake_id = ?)
+           ORDER BY created_at DESC LIMIT 12''',
+        (task_id, task['source_intake_id']),
+    ).fetchall()
     db.close()
-    return render_template('tasks/detail.html', task=task, comments=comments)
+    return render_template('tasks/detail.html', task=task, comments=comments, related_log=related_log)
 
 
 @tasks.route('/tasks/<int:task_id>/edit', methods=['GET', 'POST'])
@@ -230,6 +279,25 @@ def edit(task_id):
                 'INSERT INTO task_comments (task_id, author, comment_text) VALUES (?, ?, ?)',
                 (task_id, session.get('username'), data['new_comment'].strip()),
             )
+        updated = db.execute(
+            '''SELECT t.*, p.nick as assignee_nick
+               FROM tasks t LEFT JOIN players p ON t.assignee_id = p.id WHERE t.id = ?''',
+            (task_id,),
+        ).fetchone()
+        if task['status'] != data.get('status'):
+            _log_task_event(
+                db,
+                updated,
+                'Изменен статус задачи',
+                '%s: %s -> %s' % (updated['title'], task['status'] or '-', data.get('status') or '-'),
+            )
+        elif task['priority'] != data.get('priority') or task['deadline'] != data.get('deadline'):
+            _log_task_event(
+                db,
+                updated,
+                'Обновлена задача',
+                '%s: приоритет/срок обновлены' % updated['title'],
+            )
         db.commit()
         db.close()
         flash('Задача обновлена', 'success')
@@ -276,6 +344,14 @@ def change_status(task_id):
         return jsonify({'error': 'Invalid status'}), 400
     db = get_db()
     ensure_alliance_schema(db)
+    task = db.execute(
+        '''SELECT t.*, p.nick as assignee_nick
+           FROM tasks t LEFT JOIN players p ON t.assignee_id = p.id WHERE t.id = ?''',
+        (task_id,),
+    ).fetchone()
+    if not task:
+        db.close()
+        return jsonify({'error': 'Task not found'}), 404
     if new_status == 'Выполнена':
         db.execute(
             "UPDATE tasks SET status=?, closed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE id=?",
@@ -286,6 +362,17 @@ def change_status(task_id):
             "UPDATE tasks SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
             (new_status, task_id),
         )
+    updated = db.execute(
+        '''SELECT t.*, p.nick as assignee_nick
+           FROM tasks t LEFT JOIN players p ON t.assignee_id = p.id WHERE t.id = ?''',
+        (task_id,),
+    ).fetchone()
+    _log_task_event(
+        db,
+        updated,
+        'Изменен статус задачи',
+        '%s: %s -> %s' % (updated['title'], task['status'] or '-', new_status),
+    )
     db.commit()
     db.close()
     if request.is_json:
@@ -299,6 +386,13 @@ def delete(task_id):
         return redirect(url_for('auth.login'))
     db = get_db()
     ensure_alliance_schema(db)
+    task = db.execute(
+        '''SELECT t.*, p.nick as assignee_nick
+           FROM tasks t LEFT JOIN players p ON t.assignee_id = p.id WHERE t.id = ?''',
+        (task_id,),
+    ).fetchone()
+    if task:
+        _log_task_event(db, task, 'Удалена задача', task['title'], event_type='Удаление')
     db.execute('DELETE FROM tasks WHERE id = ?', (task_id,))
     db.commit()
     db.close()

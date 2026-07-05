@@ -7,6 +7,68 @@ import json
 center = Blueprint('center', __name__)
 
 
+def _link_intake(db, source_intake_id, target_type, target_id, relation):
+    if not source_intake_id:
+        return
+    db.execute(
+        '''INSERT INTO work_links (source_type, source_id, target_type, target_id, relation)
+           VALUES ('intake', ?, ?, ?, ?)''',
+        (source_intake_id, target_type, target_id, relation),
+    )
+
+
+def _log_request_event(db, req, title, description, event_type='Заявка'):
+    db.execute(
+        '''INSERT INTO alliance_log (event_type, title, description, related_player, author, event_date,
+           coordinates, source_intake_id, related_request_id)
+           VALUES (?, ?, ?, ?, ?, date('now'), ?, ?, ?)''',
+        (
+            event_type,
+            title,
+            description,
+            req['player_nick'] if 'player_nick' in req.keys() else None,
+            session.get('username'),
+            req['coordinates'] if 'coordinates' in req.keys() else None,
+            req['source_intake_id'] if 'source_intake_id' in req.keys() else None,
+            req['id'],
+        ),
+    )
+    log_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+    _link_intake(
+        db,
+        req['source_intake_id'] if 'source_intake_id' in req.keys() else None,
+        'log',
+        log_id,
+        'request_event',
+    )
+
+
+def _log_decision_event(db, decision, title, description, event_type='Решение'):
+    db.execute(
+        '''INSERT INTO alliance_log (event_type, title, description, related_player, author, event_date,
+           coordinates, source_intake_id, related_decision_id)
+           VALUES (?, ?, ?, ?, ?, date('now'), ?, ?, ?)''',
+        (
+            event_type,
+            title,
+            description,
+            decision['proposer'] if 'proposer' in decision.keys() else None,
+            session.get('username'),
+            decision['coordinates'] if 'coordinates' in decision.keys() else None,
+            decision['source_intake_id'] if 'source_intake_id' in decision.keys() else None,
+            decision['id'],
+        ),
+    )
+    log_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+    _link_intake(
+        db,
+        decision['source_intake_id'] if 'source_intake_id' in decision.keys() else None,
+        'log',
+        log_id,
+        'decision_event',
+    )
+
+
 @center.route('/center')
 def index():
     if 'user_id' not in session:
@@ -157,8 +219,10 @@ def decision_detail(decision_id):
         db.close()
         return redirect(url_for('center.decisions'))
     related_log = db.execute(
-        "SELECT * FROM alliance_log WHERE title LIKE ? ORDER BY created_at DESC LIMIT 5",
-        (f'%{decision["title"][:30]}%',)
+        '''SELECT * FROM alliance_log
+           WHERE related_decision_id = ? OR (source_intake_id IS NOT NULL AND source_intake_id = ?)
+           ORDER BY created_at DESC LIMIT 12''',
+        (decision_id, decision['source_intake_id'])
     ).fetchall()
     db.close()
     return render_template('center/decision_detail.html', decision=decision, related_log=related_log)
@@ -171,6 +235,11 @@ def update_decision(decision_id):
     data = {k: v for k, v in request.form.items()}
     db = get_db()
     ensure_alliance_schema(db)
+    decision = db.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,)).fetchone()
+    if not decision:
+        db.close()
+        flash('Решение не найдено', 'danger')
+        return redirect(url_for('center.decisions'))
     fields = []
     values = []
     for key in ['status', 'result', 'priority', 'deadline', 'coordinates']:
@@ -179,6 +248,16 @@ def update_decision(decision_id):
             values.append(data[key])
     values.append(decision_id)
     db.execute(f"UPDATE decisions SET {', '.join(fields)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?", values)
+    updated = db.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,)).fetchone()
+    if decision['status'] != data.get('status'):
+        _log_decision_event(
+            db,
+            updated,
+            'Изменен статус решения',
+            '%s: %s -> %s' % (updated['title'], decision['status'] or '-', data.get('status') or '-'),
+        )
+    elif decision['priority'] != data.get('priority') or decision['deadline'] != data.get('deadline'):
+        _log_decision_event(db, updated, 'Обновлено решение', updated['title'])
     db.commit()
     db.close()
     flash('Решение обновлено', 'success')
@@ -200,6 +279,9 @@ def create_decision():
              data.get('status', 'Предложено'), data.get('priority', 'Средний'),
              data.get('deadline'), data.get('coordinates'), session.get('username'))
         )
+        decision_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        decision = db.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,)).fetchone()
+        _log_decision_event(db, decision, 'Создано решение', decision['title'], event_type='Создание')
         db.commit()
         db.close()
         flash('Решение создано', 'success')
@@ -253,9 +335,15 @@ def request_detail(request_id):
     comments = db.execute(
         "SELECT * FROM request_comments WHERE request_id = ? ORDER BY created_at ASC", (request_id,)
     ).fetchall()
+    related_log = db.execute(
+        '''SELECT * FROM alliance_log
+           WHERE related_request_id = ? OR (source_intake_id IS NOT NULL AND source_intake_id = ?)
+           ORDER BY created_at DESC LIMIT 12''',
+        (request_id, req['source_intake_id']),
+    ).fetchall()
     players = db.execute("SELECT id, nick FROM players ORDER BY nick").fetchall()
     db.close()
-    return render_template('center/request_detail.html', req=req, comments=comments, players=players)
+    return render_template('center/request_detail.html', req=req, comments=comments, players=players, related_log=related_log)
 
 
 @center.route('/center/requests/<int:request_id>/update', methods=['POST'])
@@ -265,6 +353,14 @@ def update_request(request_id):
     data = {k: v for k, v in request.form.items()}
     db = get_db()
     ensure_alliance_schema(db)
+    req = db.execute(
+        "SELECT r.*, p.nick as player_nick FROM requests r LEFT JOIN players p ON r.player_id = p.id WHERE r.id = ?",
+        (request_id,),
+    ).fetchone()
+    if not req:
+        db.close()
+        flash('Запрос не найден', 'danger')
+        return redirect(url_for('center.requests_list'))
     fields = []
     values = []
     for key in ['status', 'assignee', 'resolution', 'priority', 'request_type', 'description', 'coordinates', 'due_at']:
@@ -281,6 +377,19 @@ def update_request(request_id):
             "INSERT INTO request_comments (request_id, author, comment_text) VALUES (?, ?, ?)",
             (request_id, session.get('username'), data['new_comment'].strip())
         )
+    updated = db.execute(
+        "SELECT r.*, p.nick as player_nick FROM requests r LEFT JOIN players p ON r.player_id = p.id WHERE r.id = ?",
+        (request_id,),
+    ).fetchone()
+    if req['status'] != data.get('status'):
+        _log_request_event(
+            db,
+            updated,
+            'Изменен статус заявки',
+            '%s: %s -> %s' % (updated['title'], req['status'] or '-', data.get('status') or '-'),
+        )
+    elif req['priority'] != data.get('priority') or req['assignee'] != data.get('assignee'):
+        _log_request_event(db, updated, 'Обновлена заявка', updated['title'])
 
     db.commit()
     db.close()
@@ -321,6 +430,12 @@ def create_request():
              data['title'], data.get('description'), data.get('priority', 'Средний'),
              data.get('assignee'), data.get('coordinates'), data.get('due_at'))
         )
+        request_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        req = db.execute(
+            "SELECT r.*, p.nick as player_nick FROM requests r LEFT JOIN players p ON r.player_id = p.id WHERE r.id = ?",
+            (request_id,),
+        ).fetchone()
+        _log_request_event(db, req, 'Создана заявка', req['title'], event_type='Создание')
         db.commit()
         db.close()
         flash('Запрос создан', 'success')
@@ -383,14 +498,32 @@ def ajax_request_status(request_id):
         return jsonify({'error': 'Auth required'}), 401
     data = request.get_json()
     new_status = data.get('status')
-    if new_status not in ('Новый', 'В работе', 'Выполнен', 'Отклонён'):
+    if new_status not in ('Новый', 'В работе', 'На паузе', 'Ожидает', 'Выполнен', 'Отклонён'):
         return jsonify({'error': 'Invalid status'}), 400
     db = get_db()
+    ensure_alliance_schema(db)
+    req = db.execute(
+        "SELECT r.*, p.nick as player_nick FROM requests r LEFT JOIN players p ON r.player_id = p.id WHERE r.id = ?",
+        (request_id,),
+    ).fetchone()
+    if not req:
+        db.close()
+        return jsonify({'error': 'Request not found'}), 404
     if new_status in ('Выполнен', 'Отклонён'):
         db.execute("UPDATE requests SET status = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?",
                     (new_status, request_id))
     else:
         db.execute("UPDATE requests SET status = ? WHERE id = ?", (new_status, request_id))
+    updated = db.execute(
+        "SELECT r.*, p.nick as player_nick FROM requests r LEFT JOIN players p ON r.player_id = p.id WHERE r.id = ?",
+        (request_id,),
+    ).fetchone()
+    _log_request_event(
+        db,
+        updated,
+        'Изменен статус заявки',
+        '%s: %s -> %s' % (updated['title'], req['status'] or '-', new_status),
+    )
     db.commit()
     db.close()
     return jsonify({'status': 'ok', 'new_status': new_status})
@@ -405,7 +538,19 @@ def ajax_decision_status(decision_id):
     if new_status not in ('Предложено', 'Согласовано', 'Выполнено', 'Отменено'):
         return jsonify({'error': 'Invalid status'}), 400
     db = get_db()
+    ensure_alliance_schema(db)
+    decision = db.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,)).fetchone()
+    if not decision:
+        db.close()
+        return jsonify({'error': 'Decision not found'}), 404
     db.execute("UPDATE decisions SET status = ? WHERE id = ?", (new_status, decision_id))
+    updated = db.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,)).fetchone()
+    _log_decision_event(
+        db,
+        updated,
+        'Изменен статус решения',
+        '%s: %s -> %s' % (updated['title'], decision['status'] or '-', new_status),
+    )
     db.commit()
     db.close()
     return jsonify({'status': 'ok', 'new_status': new_status})

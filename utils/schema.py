@@ -122,6 +122,7 @@ def ensure_alliance_schema(db):
     _add_column_if_missing(db, "alliance_log", "source_intake_id", "INTEGER")
     _add_column_if_missing(db, "alliance_log", "related_task_id", "INTEGER")
     _add_column_if_missing(db, "alliance_log", "related_request_id", "INTEGER")
+    _add_column_if_missing(db, "alliance_log", "related_decision_id", "INTEGER")
     _add_column_if_missing(db, "intake_items", "due_at", "TIMESTAMP")
     _add_column_if_missing(db, "intake_items", "auto_assignee_id", "INTEGER")
     _add_column_if_missing(db, "intake_items", "auto_assignee_reason", "TEXT")
