@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Разбор пачки входящих - AURUS{% endblock %}
+{% block page_title %}Разбор пачки входящих{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="text-muted small">
+        Проверьте автоматический разбор, поправьте поля и подтвердите действия пачкой.
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('inbox.list_items') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Входящие</a>
+        <a href="{{ url_for('center.control') }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-activity"></i> Контроль</a>
+    </div>
+</div>
+
+<form method="POST" action="{{ url_for('inbox.batch_confirm') }}">
+    <input type="hidden" name="item_ids" value="{{ item_ids | join(',') }}">
+
+    <div class="panel mb-3">
+        <div class="panel-header">
+            <h6><i class="bi bi-lightning-charge me-2"></i>Быстрые команды</h6>
+            <span class="small text-muted">{{ batch_items|length }} входящих в пачке</span>
+        </div>
+        <div class="panel-body d-flex flex-wrap gap-2 align-items-center">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="select-all"><i class="bi bi-check2-square"></i> Выбрать все</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="select-none"><i class="bi bi-square"></i> Снять выбор</button>
+            <button type="button" class="btn btn-sm btn-outline-info" id="enable-tasks"><i class="bi bi-list-check"></i> Задачи для всех</button>
+            <button type="button" class="btn btn-sm btn-outline-warning" id="enable-requests"><i class="bi bi-life-preserver"></i> Заявки для всех</button>
+            <button class="btn btn-sm btn-success ms-auto"><i class="bi bi-check2-circle"></i> Подтвердить выбранные</button>
+        </div>
+    </div>
+
+    <div class="d-flex flex-column gap-3">
+        {% for item in batch_items %}
+        {% set row = item.row %}
+        {% set item_id = row['id'] %}
+        <div class="panel">
+            <div class="panel-header">
+                <div class="d-flex gap-2 align-items-center">
+                    <input class="form-check-input batch-enabled" type="checkbox" name="enabled_{{ item_id }}" value="1" checked>
+                    <h6 class="mb-0"><i class="bi bi-chat-left-text me-2"></i>Входящее #{{ item_id }}</h6>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                    <span class="badge {% if row['priority'] == 'Критический' %}bg-danger{% elif row['priority'] == 'Высокий' %}bg-warning text-dark{% else %}bg-info{% endif %}">
+                        {{ row['priority'] or '-' }}
+                    </span>
+                    <a href="{{ url_for('inbox.detail', item_id=item_id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-right"></i></a>
+                </div>
+            </div>
+            <div class="panel-body">
+                <div class="row g-3">
+                    <div class="col-xl-4">
+                        <div class="small text-muted mb-1">Исходный текст</div>
+                        <div class="p-2 rounded small" style="background:var(--bg-main);white-space:pre-wrap;max-height:150px;overflow:auto;">{{ row['raw_text'] }}</div>
+                        <div class="small text-muted mt-2">
+                            Источник: {{ row['source_type'] or '-' }} · {{ row['created_at'][:16] if row['created_at'] else '' }}
+                        </div>
+                        <div class="mt-2">
+                            {% for coord in item.coords %}
+                            <a class="small link-accent me-2" href="{{ url_for('map.index') }}?focus={{ coord.text }}"><code>{{ coord.text }}</code></a>
+                            {% endfor %}
+                            {% if not item.coords %}<span class="small text-muted">Координаты не найдены</span>{% endif %}
+                        </div>
+                    </div>
+                    <div class="col-xl-5">
+                        <div class="row g-2">
+                            <div class="col-md-8">
+                                <label class="form-label small mb-1">Сводка</label>
+                                <input name="summary_{{ item_id }}" class="form-control form-control-sm" value="{{ row['summary'] or '' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-1">Категория</label>
+                                <input name="category_{{ item_id }}" class="form-control form-control-sm" value="{{ item.analysis.category_label or row['category'] or '' }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-1">Приоритет</label>
+                                <select name="priority_{{ item_id }}" class="form-select form-select-sm">
+                                    {% for p in priorities %}
+                                    <option value="{{ p }}" {% if (row['priority'] or 'Средний') == p %}selected{% endif %}>{{ p }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-1">Статус после</label>
+                                <select name="status_{{ item_id }}" class="form-select form-select-sm">
+                                    {% for s in ['В работе', 'Обработано', 'Требует подтверждения'] %}
+                                    <option value="{{ s }}" {% if s == 'В работе' %}selected{% endif %}>{{ s }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-1">Срок</label>
+                                <input name="due_at_{{ item_id }}" class="form-control form-control-sm" value="{{ row['due_at'] or '' }}" placeholder="YYYY-MM-DD HH:MM">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-1">Игрок</label>
+                                <select name="source_player_id_{{ item_id }}" class="form-select form-select-sm">
+                                    <option value="">Не привязан</option>
+                                    {% for p in players %}
+                                    <option value="{{ p['id'] }}" {% if item.first_player_id|string == p['id']|string %}selected{% endif %}>{{ p['nick'] }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-1">Исполнитель</label>
+                                <select name="assignee_id_{{ item_id }}" class="form-select form-select-sm">
+                                    <option value="">Не назначен</option>
+                                    {% for p in players %}
+                                    <option value="{{ p['id'] }}" {% if item.assignee_id|string == p['id']|string %}selected{% endif %}>{{ p['nick'] }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small mb-1">Координаты</label>
+                                <input name="coordinates_{{ item_id }}" class="form-control form-control-sm" value="{{ item.first_coord }}" placeholder="[2500:2500:0]">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small mb-1">Направление</label>
+                                <select name="direction_{{ item_id }}" class="form-select form-select-sm">
+                                    {% for d in task_directions %}
+                                    <option value="{{ d }}" {% if item.direction == d %}selected{% endif %}>{{ d }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small mb-1">Тип задачи</label>
+                                <select name="task_type_{{ item_id }}" class="form-select form-select-sm">
+                                    {% for t in task_types %}
+                                    <option value="{{ t }}" {% if item.task_type == t %}selected{% endif %}>{{ t }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3">
+                        <div class="small text-muted fw-bold text-uppercase mb-2">Создать</div>
+                        {% for action, label, icon, color in [
+                            ('task', 'Задача', 'bi-list-check', 'text-info'),
+                            ('request', 'Заявка', 'bi-life-preserver', 'text-warning'),
+                            ('note', 'Заметка игроку', 'bi-person-lines-fill', 'text-primary'),
+                            ('log', 'Журнал', 'bi-journal-text', 'text-success')
+                        ] %}
+                        <label class="d-flex gap-2 align-items-center p-2 rounded mb-2" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);cursor:pointer;">
+                            <input class="form-check-input batch-action batch-action-{{ action }}" type="checkbox" name="actions_{{ item_id }}" value="{{ action }}" {% if action in item.default_actions %}checked{% endif %}>
+                            <span><i class="bi {{ icon }} {{ color }}"></i> {{ label }}</span>
+                        </label>
+                        {% endfor %}
+                        <div class="small text-muted mt-2">
+                            {% if row['auto_assignee_nick'] %}Предложен исполнитель: {{ row['auto_assignee_nick'] }}{% else %}Исполнитель не предложен{% endif %}
+                        </div>
+                        {% if item.proposals %}
+                        <div class="small text-muted mt-2">
+                            Предложений: {{ item.proposals|length }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 mt-3">
+        <a href="{{ url_for('inbox.list_items', status='Требует подтверждения') }}" class="btn btn-outline-secondary">Отмена</a>
+        <button class="btn btn-success"><i class="bi bi-check2-circle"></i> Подтвердить выбранные</button>
+    </div>
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('select-all').addEventListener('click', function() {
+    document.querySelectorAll('.batch-enabled').forEach(function(input) { input.checked = true; });
+});
+document.getElementById('select-none').addEventListener('click', function() {
+    document.querySelectorAll('.batch-enabled').forEach(function(input) { input.checked = false; });
+});
+document.getElementById('enable-tasks').addEventListener('click', function() {
+    document.querySelectorAll('.batch-action-task').forEach(function(input) { input.checked = true; });
+});
+document.getElementById('enable-requests').addEventListener('click', function() {
+    document.querySelectorAll('.batch-action-request').forEach(function(input) { input.checked = true; });
+});
+</script>
+{% endblock %}

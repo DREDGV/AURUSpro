@@ -423,8 +423,214 @@ def create_item():
     db.close()
     if len(item_ids) == 1:
         return redirect(url_for('inbox.detail', item_id=item_ids[0]))
-    flash(f'Добавлено входящих: {len(item_ids)}. Они ждут подтверждения.', 'success')
-    return redirect(url_for('inbox.list_items', status='Требует подтверждения'))
+    flash(f'Добавлено входящих: {len(item_ids)}. Проверьте разбор пачки и подтвердите нужные действия.', 'success')
+    return redirect(url_for('inbox.batch_review', ids=','.join(str(item_id) for item_id in item_ids)))
+
+
+@inbox.route('/inbox/batch')
+def batch_review():
+    if 'user_id' not in session:
+        return redirect(url_for('auth.login'))
+    raw_ids = request.args.get('ids', '')
+    item_ids = []
+    for chunk in raw_ids.split(','):
+        try:
+            item_id = int(chunk)
+        except (TypeError, ValueError):
+            continue
+        if item_id not in item_ids:
+            item_ids.append(item_id)
+    item_ids = item_ids[:100]
+    if not item_ids:
+        flash('Нет входящих для разбора пачки', 'warning')
+        return redirect(url_for('inbox.list_items'))
+
+    db = get_db()
+    ensure_alliance_schema(db)
+    placeholders = ','.join('?' for _ in item_ids)
+    rows = db.execute(
+        f'''SELECT i.*, p.nick as player_nick, ap.nick as auto_assignee_nick
+            FROM intake_items i
+            LEFT JOIN players p ON p.id = i.source_player_id
+            LEFT JOIN players ap ON ap.id = i.auto_assignee_id
+            WHERE i.id IN ({placeholders})''',
+        item_ids,
+    ).fetchall()
+    by_id = {row['id']: row for row in rows}
+    batch_items = [_batch_item_payload(by_id[item_id]) for item_id in item_ids if item_id in by_id]
+    players = _players(db)
+    db.close()
+    if not batch_items:
+        flash('Входящие для разбора не найдены', 'warning')
+        return redirect(url_for('inbox.list_items'))
+    return render_template(
+        'inbox/batch.html',
+        batch_items=batch_items,
+        item_ids=[item['row']['id'] for item in batch_items],
+        players=players,
+        priorities=PRIORITIES,
+        statuses=INBOX_STATUSES,
+        task_directions=TASK_DIRECTIONS,
+        task_types=TASK_TYPES,
+    )
+
+
+@inbox.route('/inbox/batch/confirm', methods=['POST'])
+def batch_confirm():
+    if 'user_id' not in session:
+        return redirect(url_for('auth.login'))
+    raw_ids = request.form.get('item_ids', '')
+    item_ids = []
+    for chunk in raw_ids.split(','):
+        try:
+            item_id = int(chunk)
+        except (TypeError, ValueError):
+            continue
+        if item_id not in item_ids:
+            item_ids.append(item_id)
+    if not item_ids:
+        flash('Нет входящих для подтверждения', 'warning')
+        return redirect(url_for('inbox.list_items'))
+
+    db = get_db()
+    ensure_alliance_schema(db)
+    confirmed = 0
+    created_refs = []
+    for item_id in item_ids[:100]:
+        if request.form.get(f'enabled_{item_id}') != '1':
+            continue
+        item = db.execute(
+            '''SELECT i.*, p.nick as player_nick, ap.nick as auto_assignee_nick
+               FROM intake_items i
+               LEFT JOIN players p ON p.id = i.source_player_id
+               LEFT JOIN players ap ON ap.id = i.auto_assignee_id
+               WHERE i.id = ?''',
+            (item_id,),
+        ).fetchone()
+        if not item:
+            continue
+
+        proposals = _load_proposals(item)
+        summary = (request.form.get(f'summary_{item_id}') or item['summary'] or '').strip()
+        category = (request.form.get(f'category_{item_id}') or item['category'] or '').strip()
+        priority = request.form.get(f'priority_{item_id}') if request.form.get(f'priority_{item_id}') in PRIORITIES else (item['priority'] or 'Средний')
+        status_after = request.form.get(f'status_{item_id}') if request.form.get(f'status_{item_id}') in INBOX_STATUSES else 'В работе'
+        due_at = _clean_due_at(request.form.get(f'due_at_{item_id}') or item['due_at'])
+        coordinates = _normalize_coordinate_text(request.form.get(f'coordinates_{item_id}')) or _first_coordinate_text(item)
+        source_player_id = request.form.get(f'source_player_id_{item_id}') or None
+        assignee_id = request.form.get(f'assignee_id_{item_id}') or None
+        direction = request.form.get(f'direction_{item_id}') or ((_load_analysis(item).get('routing') or {}).get('direction')) or 'Карта'
+        task_type = request.form.get(f'task_type_{item_id}') or ((_load_analysis(item).get('routing') or {}).get('task_type')) or 'other'
+        source_player = _player_summary(db, source_player_id)
+        assignee = _player_summary(db, assignee_id)
+
+        analysis = _load_analysis(item)
+        analysis['summary'] = summary
+        analysis['category_label'] = category
+        analysis['priority'] = priority
+        analysis['coordinates'] = extract_coordinates(coordinates or '')
+        analysis['players'] = [source_player] if source_player else analysis.get('players') or []
+        analysis['routing'] = {
+            **(analysis.get('routing') or {}),
+            'direction': direction,
+            'task_type': task_type,
+            'reason': 'подтверждено в разборе пачки',
+        }
+        analysis['sla'] = {'due_at': due_at, 'hours': SLA_HOURS.get(priority or 'Средний', 24)}
+        if assignee:
+            analysis['assignment'] = {
+                'id': assignee['id'],
+                'nick': assignee['nick'],
+                'reason': 'подтверждено в разборе пачки',
+            }
+
+        db.execute(
+            '''UPDATE intake_items
+               SET source_player_id=?, category=?, priority=?, summary=?, analysis_json=?,
+                   due_at=?, auto_assignee_id=?, auto_assignee_reason=?, map_alert=?,
+                   status=?, updated_at=CURRENT_TIMESTAMP
+               WHERE id=?''',
+            (
+                source_player_id,
+                category,
+                priority,
+                summary,
+                json.dumps(analysis, ensure_ascii=False),
+                due_at,
+                assignee_id,
+                'подтверждено в разборе пачки' if assignee_id else None,
+                1 if coordinates and priority in ('Критический', 'Высокий') else 0,
+                status_after,
+                item_id,
+            ),
+        )
+
+        item_for_create = dict(item)
+        item_for_create.update({
+            'source_player_id': source_player_id,
+            'player_nick': source_player['nick'] if source_player else item['player_nick'],
+            'auto_assignee_id': assignee_id,
+            'auto_assignee_nick': assignee['nick'] if assignee else item['auto_assignee_nick'],
+            'priority': priority,
+            'category': category,
+            'summary': summary,
+            'due_at': due_at,
+        })
+        overrides = {
+            'priority': priority,
+            'coordinates': coordinates,
+            'assignee_id': assignee_id,
+            'assignee': assignee['nick'] if assignee else None,
+            'deadline': due_at,
+            'direction': direction,
+            'task_type': task_type,
+            'source_player_id': source_player_id,
+            'player_id': source_player_id,
+        }
+
+        item_created_refs = []
+        actions = request.form.getlist(f'actions_{item_id}')
+        for action in actions:
+            if action == 'task' and item['created_task_id']:
+                continue
+            if action == 'request' and item['created_request_id']:
+                continue
+            if action == 'log' and item['created_log_id']:
+                continue
+            if action == 'note' and item['created_note_id']:
+                continue
+            proposal = _proposal_by_kind(proposals, action, item_for_create)
+            try:
+                target_type, created_id = _create_work_from_intake(db, item_for_create, proposal, action, overrides)
+            except ValueError:
+                continue
+            ref = '%s #%s' % (target_type, created_id)
+            item_created_refs.append(ref)
+            created_refs.append(ref)
+
+        log_description = 'Пачка входящих: подтвержден разбор. Действия: %s.' % (', '.join(item_created_refs) if item_created_refs else 'без новых действий')
+        db.execute(
+            '''INSERT INTO alliance_log (event_type, title, description, related_player, author, event_date,
+               coordinates, source_intake_id)
+               VALUES (?, ?, ?, ?, ?, date('now'), ?, ?)''',
+            (
+                'Входящее',
+                'Подтверждено входящее #%d из пачки' % item_id,
+                log_description,
+                source_player['nick'] if source_player else item['player_nick'],
+                session.get('username'),
+                coordinates,
+                item_id,
+            ),
+        )
+        confirmation_log_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+        _link_work_item(db, item_id, 'log', confirmation_log_id, relation='batch_confirmed')
+        confirmed += 1
+
+    db.commit()
+    db.close()
+    flash('Подтверждено входящих: %d. Создано действий: %d.' % (confirmed, len(created_refs)), 'success')
+    return redirect(url_for('inbox.list_items', status='В работе'))
 
 
 @inbox.route('/inbox/<int:item_id>')
@@ -530,6 +736,52 @@ def _proposal_by_index(item, index):
     if 0 <= index < len(proposals):
         return proposals[index]
     return {}
+
+
+def _proposal_by_kind(proposals, kind, item):
+    for proposal in proposals:
+        if proposal.get('kind') == kind:
+            return proposal
+    fallback_titles = {
+        'task': item['summary'] or 'Задача из входящего',
+        'request': item['summary'] or 'Обращение игрока',
+        'log': item['summary'] or 'Входящее',
+        'note': item['summary'] or 'Заметка из входящего',
+    }
+    return {
+        'kind': kind,
+        'title': fallback_titles.get(kind, item['summary'] or 'Входящее'),
+        'description': item['raw_text'],
+    }
+
+
+def _batch_item_payload(row):
+    analysis = _load_analysis(row)
+    proposals = _load_proposals(row)
+    coords = analysis.get('coordinates') or []
+    players = analysis.get('players') or []
+    routing = analysis.get('routing') or {}
+    assignment = analysis.get('assignment') or {}
+    default_actions = []
+    for proposal in proposals:
+        kind = proposal.get('kind')
+        if kind in ('task', 'request') and kind not in default_actions:
+            default_actions.append(kind)
+    if not default_actions:
+        default_actions.append('log')
+    return {
+        'row': row,
+        'analysis': analysis,
+        'proposals': proposals,
+        'players': players,
+        'coords': coords,
+        'first_coord': coords[0].get('text') if coords else '',
+        'first_player_id': row['source_player_id'] or (players[0].get('id') if players else ''),
+        'direction': routing.get('direction') or 'Карта',
+        'task_type': routing.get('task_type') or 'other',
+        'assignee_id': row['auto_assignee_id'] or assignment.get('id') or '',
+        'default_actions': default_actions,
+    }
 
 
 @inbox.route('/inbox/<int:item_id>/quick-resolve', methods=['POST'])
