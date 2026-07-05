@@ -68,7 +68,7 @@
         <div class="row g-2">
             {% for item in command_health %}
             <div class="col-md">
-                <a href="{{ item.url }}" class="d-block p-3 rounded h-100 text-decoration-none" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);">
+                <a href="{{ item.url }}" class="command-link-card d-block p-3 rounded h-100 text-decoration-none text-reset" title="Открыть: {{ item.title }}">
                     <div class="d-flex justify-content-between align-items-start gap-2">
                         <div>
                             <div class="small text-muted">{{ item.title }}</div>
@@ -217,7 +217,14 @@
                         </td>
                         <td>
                             <a href="{{ url_for('center.request_detail', request_id=r['id']) }}" class="link-accent fw-semibold">{{ r['title'] }}</a>
-                            <br><small class="text-muted">{{ r['player_nick'] or '—' }} · {{ r['request_type'] }}</small>
+                            <br><small class="text-muted">
+                                {% if r['player_id'] and r['player_nick'] %}
+                                <a href="{{ url_for('players.card', player_id=r['player_id']) }}" class="link-accent">{{ r['player_nick'] }}</a>
+                                {% else %}
+                                —
+                                {% endif %}
+                                · <a href="{{ url_for('center.requests_list', type=r['request_type']) }}" class="link-accent">{{ r['request_type'] }}</a>
+                            </small>
                         </td>
                         <td class="text-end">
                             <button class="btn btn-sm btn-outline-success" onclick="quickStatus({{ r['id'] }}, 'В работе')">В работу</button>
