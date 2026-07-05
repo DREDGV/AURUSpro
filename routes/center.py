@@ -202,6 +202,99 @@ def index():
     map_intake_alerts = _intake_alerts(db, limit=50)[:6]
     map_work_markers = _work_markers(db, limit=50)[:6]
     quick_players = db.execute("SELECT id, nick FROM players ORDER BY nick").fetchall()
+    active_inbox_count = db.execute(
+        "SELECT COUNT(*) FROM intake_items WHERE status NOT IN ('Обработано', 'Отклонено')"
+    ).fetchone()[0]
+    open_requests_count = db.execute(
+        "SELECT COUNT(*) FROM requests WHERE status IS NULL OR status NOT IN ('Выполнен', 'Отклонён')"
+    ).fetchone()[0]
+    pending_decisions_count = db.execute(
+        "SELECT COUNT(*) FROM decisions WHERE status IS NULL OR status NOT IN ('Выполнено', 'Отменено')"
+    ).fetchone()[0]
+    unassigned_tasks_count = db.execute(
+        """SELECT COUNT(*) FROM tasks
+           WHERE (assignee_id IS NULL OR assignee_id = '')
+             AND (status IS NULL OR status NOT IN ('Выполнена', 'Отменена'))"""
+    ).fetchone()[0]
+    coordinate_work_count = len(map_intake_alerts) + len(map_work_markers) + len(map_tasks)
+    command_health = [
+        {
+            'title': 'Входящие',
+            'value': active_inbox_count,
+            'detail': '%s новых · %s ждут подтверждения' % (inbox_new, inbox_pending),
+            'severity': 'danger' if overdue_inbox else ('warning' if active_inbox_count else 'ok'),
+            'url': url_for('inbox.list_items'),
+            'icon': 'bi-inbox',
+        },
+        {
+            'title': 'Сроки',
+            'value': overdue_inbox + overdue_tasks,
+            'detail': '%s входящих · %s задач просрочено' % (overdue_inbox, overdue_tasks),
+            'severity': 'danger' if overdue_inbox + overdue_tasks else 'ok',
+            'url': url_for('center.control'),
+            'icon': 'bi-alarm',
+        },
+        {
+            'title': 'Исполнители',
+            'value': unassigned_tasks_count,
+            'detail': 'задач без ответственного',
+            'severity': 'warning' if unassigned_tasks_count else 'ok',
+            'url': url_for('tasks.list'),
+            'icon': 'bi-person-exclamation',
+        },
+        {
+            'title': 'Заявки',
+            'value': open_requests_count,
+            'detail': '%s решений в работе' % pending_decisions_count,
+            'severity': 'warning' if open_requests_count else 'ok',
+            'url': url_for('center.requests_list'),
+            'icon': 'bi-life-preserver',
+        },
+        {
+            'title': 'Карта',
+            'value': coordinate_work_count,
+            'detail': '%s проблем сети · %s записей штаба' % (len(network_issues), len(map_work_markers)),
+            'severity': 'danger' if network_issues else ('info' if coordinate_work_count else 'ok'),
+            'url': url_for('map.index'),
+            'icon': 'bi-map',
+        },
+    ]
+    today_focus = []
+    if overdue_inbox:
+        today_focus.append({
+            'label': 'Разобрать просроченные входящие',
+            'meta': '%s шт.' % overdue_inbox,
+            'url': url_for('inbox.list_items', view='overdue'),
+            'severity': 'danger',
+        })
+    if overdue_tasks:
+        today_focus.append({
+            'label': 'Закрыть или переназначить просроченные задачи',
+            'meta': '%s шт.' % overdue_tasks,
+            'url': url_for('center.control'),
+            'severity': 'danger',
+        })
+    if network_issues:
+        today_focus.append({
+            'label': 'Проверить слабые места сети алстанций',
+            'meta': '%s шт.' % len(network_issues),
+            'url': url_for('map.index'),
+            'severity': 'warning',
+        })
+    if unassigned_tasks_count:
+        today_focus.append({
+            'label': 'Назначить исполнителей задачам',
+            'meta': '%s шт.' % unassigned_tasks_count,
+            'url': url_for('tasks.list'),
+            'severity': 'warning',
+        })
+    if open_requests_count:
+        today_focus.append({
+            'label': 'Проверить заявки без решения',
+            'meta': '%s шт.' % open_requests_count,
+            'url': url_for('center.requests_list'),
+            'severity': 'info',
+        })
 
     db.close()
     return render_template('center/index.html',
@@ -225,6 +318,8 @@ def index():
         map_intake_alerts=map_intake_alerts,
         map_work_markers=map_work_markers,
         quick_players=quick_players,
+        command_health=command_health,
+        today_focus=today_focus[:5],
         network_issues=network_issues)
 
 

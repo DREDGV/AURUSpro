@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, session, redirect, url_for
 from utils.db import get_db
+from utils.schema import ensure_alliance_schema
 from config import ACCESS_LEVELS
 
 dashboard = Blueprint('dashboard', __name__)
@@ -10,12 +11,38 @@ def index():
     if 'user_id' not in session:
         return redirect(url_for('auth.login'))
     db = get_db()
+    ensure_alliance_schema(db)
     total_players = db.execute('SELECT COUNT(*) FROM players').fetchone()[0]
     total_accounts = db.execute('SELECT COUNT(*) FROM accounts').fetchone()[0]
     active_today = db.execute("SELECT COUNT(*) FROM players WHERE activity LIKE '%Активен%'").fetchone()[0]
     inactive_count = total_players - active_today
     open_tasks = db.execute("SELECT COUNT(*) FROM tasks WHERE status IN ('Новая', 'В работе')").fetchone()[0]
     critical_tasks = db.execute("SELECT COUNT(*) FROM tasks WHERE priority = 'Критический' AND status != 'Выполнена'").fetchone()[0]
+    command_stats = {
+        'active_inbox': db.execute(
+            "SELECT COUNT(*) FROM intake_items WHERE status NOT IN ('Обработано', 'Отклонено')"
+        ).fetchone()[0],
+        'overdue_inbox': db.execute(
+            """SELECT COUNT(*) FROM intake_items
+               WHERE due_at IS NOT NULL
+                 AND due_at < strftime('%Y-%m-%d %H:%M', 'now', 'localtime')
+                 AND status NOT IN ('Обработано', 'Отклонено')"""
+        ).fetchone()[0],
+        'overdue_tasks': db.execute(
+            """SELECT COUNT(*) FROM tasks
+               WHERE deadline IS NOT NULL AND deadline != ''
+                 AND deadline < strftime('%Y-%m-%d %H:%M', 'now', 'localtime')
+                 AND (status IS NULL OR status NOT IN ('Выполнена', 'Отменена'))"""
+        ).fetchone()[0],
+        'open_requests': db.execute(
+            "SELECT COUNT(*) FROM requests WHERE status IS NULL OR status NOT IN ('Выполнен', 'Отклонён')"
+        ).fetchone()[0],
+        'map_work': db.execute(
+            """SELECT COUNT(*) FROM tasks
+               WHERE coordinates IS NOT NULL AND coordinates != ''
+                 AND (status IS NULL OR status NOT IN ('Выполнена', 'Отменена'))"""
+        ).fetchone()[0],
+    }
 
     top_players = db.execute(
         'SELECT p.id, p.nick, p.rank_in_game, p.role, p.activity, '
@@ -43,6 +70,7 @@ def index():
                            inactive_count=inactive_count,
                            open_tasks=open_tasks,
                            critical_tasks=critical_tasks,
+                           command_stats=command_stats,
                            top_players=top_players,
                            recent_tasks=recent_tasks,
                            access_levels=access_levels)

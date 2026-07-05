@@ -42,6 +42,49 @@
     </div>
 </div>
 
+<div class="panel mb-3">
+    <div class="panel-header">
+        <h6><i class="bi bi-command me-2"></i>Штаб альянса</h6>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('center.index') }}" class="btn btn-sm btn-outline-primary">Центр</a>
+            <a href="{{ url_for('center.control') }}" class="btn btn-sm btn-outline-danger">Контроль</a>
+            <a href="{{ url_for('inbox.list_items') }}" class="btn btn-sm btn-outline-info">Входящие</a>
+        </div>
+    </div>
+    <div class="panel-body">
+        <div class="row g-2">
+            <div class="col-md">
+                <a href="{{ url_for('inbox.list_items') }}" class="d-block p-3 rounded text-decoration-none" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);">
+                    <div class="small text-muted">Активные входящие</div>
+                    <div class="fs-4 fw-bold text-info">{{ command_stats.active_inbox }}</div>
+                    <div class="small text-muted">{{ command_stats.overdue_inbox }} просрочено</div>
+                </a>
+            </div>
+            <div class="col-md">
+                <a href="{{ url_for('center.control') }}" class="d-block p-3 rounded text-decoration-none" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);">
+                    <div class="small text-muted">Просроченные задачи</div>
+                    <div class="fs-4 fw-bold {% if command_stats.overdue_tasks %}text-danger{% else %}text-success{% endif %}">{{ command_stats.overdue_tasks }}</div>
+                    <div class="small text-muted">требуют контроля срока</div>
+                </a>
+            </div>
+            <div class="col-md">
+                <a href="{{ url_for('center.requests_list') }}" class="d-block p-3 rounded text-decoration-none" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);">
+                    <div class="small text-muted">Открытые заявки</div>
+                    <div class="fs-4 fw-bold text-warning">{{ command_stats.open_requests }}</div>
+                    <div class="small text-muted">без финального решения</div>
+                </a>
+            </div>
+            <div class="col-md">
+                <a href="{{ url_for('map.index') }}" class="d-block p-3 rounded text-decoration-none" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);">
+                    <div class="small text-muted">Работа на карте</div>
+                    <div class="fs-4 fw-bold text-info">{{ command_stats.map_work }}</div>
+                    <div class="small text-muted">активных задач с координатами</div>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="dashboard-grid">
     <div class="panel">
         <div class="panel-header">
