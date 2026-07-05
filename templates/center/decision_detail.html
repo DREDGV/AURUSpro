@@ -12,12 +12,16 @@
             </div>
             <div class="panel-body">
                 <div class="d-flex gap-2 mb-3">
-                    <span class="badge {% if decision['status'] == 'Предложено' %}bg-primary{% elif decision['status'] == 'Согласовано' %}bg-warning text-dark{% elif decision['status'] == 'Выполнено' %}bg-success{% else %}bg-secondary{% endif %}">
+                    <a href="{{ url_for('center.decisions', status=decision['status']) }}" class="badge text-decoration-none {% if decision['status'] == 'Предложено' %}bg-primary{% elif decision['status'] == 'Согласовано' %}bg-warning text-dark{% elif decision['status'] == 'Выполнено' %}bg-success{% else %}bg-secondary{% endif %}">
                         {{ decision['status'] }}
-                    </span>
-                    <span class="badge {% if decision['priority'] == 'Высокий' %}bg-warning text-dark{% elif decision['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">
+                    </a>
+                    {% if decision['priority'] %}
+                    <a href="{{ url_for('center.decisions', priority=decision['priority']) }}" class="badge text-decoration-none {% if decision['priority'] == 'Высокий' %}bg-warning text-dark{% elif decision['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">
                         {{ decision['priority'] or '—' }}
-                    </span>
+                    </a>
+                    {% else %}
+                    <span class="badge bg-secondary">—</span>
+                    {% endif %}
                 </div>
                 {% if decision['description'] %}
                 <p>{{ decision['description'] }}</p>
@@ -25,7 +29,12 @@
                 <hr>
                 <div class="row">
                     <div class="col-md-6">
-                        <small class="text-muted">Предложил:</small> <strong>{{ decision['proposer'] or '—' }}</strong>
+                        <small class="text-muted">Предложил:</small>
+                        {% if decision['proposer_player_id'] and decision['proposer'] %}
+                        <a class="link-accent fw-semibold" href="{{ url_for('players.card', player_id=decision['proposer_player_id']) }}">{{ decision['proposer'] }}</a>
+                        {% else %}
+                        <strong>{{ decision['proposer'] or '—' }}</strong>
+                        {% endif %}
                     </div>
                     <div class="col-md-6">
                         <small class="text-muted">Создатель записи:</small> <strong>{{ decision['created_by'] or '—' }}</strong>

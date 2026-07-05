@@ -15,12 +15,12 @@
             </div>
             <div class="panel-body">
                 <div class="d-flex gap-2 mb-3">
-                    <span class="badge {% if task['priority'] == 'Критический' %}bg-danger{% elif task['priority'] == 'Высокий' %}bg-warning text-dark{% elif task['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">
+                    <a href="{{ url_for('tasks.list', priority=task['priority']) }}" class="badge text-decoration-none {% if task['priority'] == 'Критический' %}bg-danger{% elif task['priority'] == 'Высокий' %}bg-warning text-dark{% elif task['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">
                         {{ task['priority'] }}
-                    </span>
-                    <span class="badge {% if task['status'] == 'Новая' %}bg-primary{% elif task['status'] == 'В работе' %}bg-warning text-dark{% elif task['status'] == 'Выполнена' %}bg-success{% elif task['status'] == 'Ожидает' %}bg-secondary{% else %}bg-dark{% endif %}">
+                    </a>
+                    <a href="{{ url_for('tasks.list', status=task['status']) }}" class="badge text-decoration-none {% if task['status'] == 'Новая' %}bg-primary{% elif task['status'] == 'В работе' %}bg-warning text-dark{% elif task['status'] == 'Выполнена' %}bg-success{% elif task['status'] == 'Ожидает' %}bg-secondary{% else %}bg-dark{% endif %}">
                         {{ task['status'] }}
-                    </span>
+                    </a>
                 </div>
                 {% if task['description'] %}
                 <div class="p-3 rounded mb-3" style="background:var(--bg-main);">
@@ -28,19 +28,35 @@
                 </div>
                 {% endif %}
                 <div class="row text-muted" style="font-size:13px;">
-                    <div class="col-md-4"><strong>Ответственный:</strong> {{ task['assignee_nick'] or '-' }}</div>
-                    <div class="col-md-4"><strong>Направление:</strong> {{ task['direction'] or '-' }}</div>
+                    <div class="col-md-4"><strong>Ответственный:</strong>
+                        {% if task['assignee_id'] and task['assignee_nick'] %}
+                        <a class="link-accent" href="{{ url_for('players.card', player_id=task['assignee_id']) }}">{{ task['assignee_nick'] }}</a>
+                        {% else %}-{% endif %}
+                    </div>
+                    <div class="col-md-4"><strong>Направление:</strong>
+                        {% if task['direction'] %}
+                        <a class="link-accent" href="{{ url_for('tasks.list', direction=task['direction']) }}">{{ task['direction'] }}</a>
+                        {% else %}-{% endif %}
+                    </div>
                     <div class="col-md-4"><strong>Срок:</strong> {{ task['deadline'] or '-' }}</div>
                 </div>
                 <div class="row text-muted mt-2" style="font-size:13px;">
-                    <div class="col-md-4"><strong>Тип:</strong> {{ task['task_type'] or '-' }}</div>
+                    <div class="col-md-4"><strong>Тип:</strong>
+                        {% if task['task_type'] %}
+                        <a class="link-accent" href="{{ url_for('tasks.list', type=task['task_type']) }}">{{ task['task_type'] }}</a>
+                        {% else %}-{% endif %}
+                    </div>
                     <div class="col-md-4">
                         <strong>Координаты:</strong>
                         {% if task['coordinates'] %}
                         <a class="link-accent" href="{{ url_for('map.index') }}?focus={{ task['coordinates'] }}"><code>{{ task['coordinates'] }}</code></a>
                         {% else %}-{% endif %}
                     </div>
-                    <div class="col-md-4"><strong>Объект:</strong> {{ task['map_object_type'] or '-' }}{% if task['map_object_id'] %} #{{ task['map_object_id'] }}{% endif %}</div>
+                    <div class="col-md-4"><strong>Объект:</strong>
+                        {% if task['map_object_id'] %}
+                        <a class="link-accent" href="{{ url_for('game_objects.detail', obj_id=task['map_object_id']) }}">{{ task['map_object_type'] or 'объект' }} #{{ task['map_object_id'] }}</a>
+                        {% else %}{{ task['map_object_type'] or '-' }}{% endif %}
+                    </div>
                 </div>
                 {% if task['participants'] %}
                 <div class="mt-2 text-muted" style="font-size:13px;"><strong>Участники:</strong> {{ task['participants'] }}</div>

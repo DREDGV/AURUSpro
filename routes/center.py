@@ -548,15 +548,33 @@ def control():
 def decisions():
     if 'user_id' not in session:
         return redirect(url_for('auth.login'))
+    status_filter = request.args.get('status', '')
+    priority_filter = request.args.get('priority', '')
     db = get_db()
     ensure_alliance_schema(db)
-    all_decisions = db.execute(
-        "SELECT * FROM decisions ORDER BY "
-        "CASE status WHEN 'Предложено' THEN 0 WHEN 'Согласовано' THEN 1 WHEN 'Выполнено' THEN 2 ELSE 3 END, "
-        "created_at DESC"
-    ).fetchall()
+    query = (
+        "SELECT d.*, p.id AS proposer_player_id "
+        "FROM decisions d LEFT JOIN players p ON p.nick = d.proposer WHERE 1=1"
+    )
+    params = []
+    if status_filter:
+        query += " AND d.status = ?"
+        params.append(status_filter)
+    if priority_filter:
+        query += " AND d.priority = ?"
+        params.append(priority_filter)
+    query += (
+        " ORDER BY CASE d.status WHEN 'Предложено' THEN 0 WHEN 'Согласовано' THEN 1 "
+        "WHEN 'Выполнено' THEN 2 ELSE 3 END, d.created_at DESC"
+    )
+    all_decisions = db.execute(query, params).fetchall()
     db.close()
-    return render_template('center/decisions.html', decisions=all_decisions)
+    return render_template(
+        'center/decisions.html',
+        decisions=all_decisions,
+        current_status=status_filter,
+        current_priority=priority_filter,
+    )
 
 
 @center.route('/center/decisions/<int:decision_id>')
@@ -565,7 +583,11 @@ def decision_detail(decision_id):
         return redirect(url_for('auth.login'))
     db = get_db()
     ensure_alliance_schema(db)
-    decision = db.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,)).fetchone()
+    decision = db.execute(
+        "SELECT d.*, p.id AS proposer_player_id FROM decisions d "
+        "LEFT JOIN players p ON p.nick = d.proposer WHERE d.id = ?",
+        (decision_id,),
+    ).fetchone()
     if not decision:
         flash('Решение не найдено', 'danger')
         db.close()
@@ -659,6 +681,7 @@ def requests_list():
         return redirect(url_for('auth.login'))
     status_filter = request.args.get('status', '')
     type_filter = request.args.get('type', '')
+    priority_filter = request.args.get('priority', '')
     db = get_db()
     query = "SELECT r.*, p.nick as player_nick FROM requests r LEFT JOIN players p ON r.player_id = p.id WHERE 1=1"
     params = []
@@ -668,6 +691,9 @@ def requests_list():
     if type_filter:
         query += " AND r.request_type = ?"
         params.append(type_filter)
+    if priority_filter:
+        query += " AND r.priority = ?"
+        params.append(priority_filter)
     query += " ORDER BY CASE r.status WHEN 'Новый' THEN 0 WHEN 'В работе' THEN 1 WHEN 'На паузе' THEN 2 WHEN 'Ожидает' THEN 3 WHEN 'Выполнен' THEN 4 ELSE 5 END, CASE r.priority WHEN 'Критический' THEN 0 WHEN 'Высокий' THEN 1 WHEN 'Средний' THEN 2 ELSE 3 END, r.created_at DESC"
     all_requests = db.execute(query, params).fetchall()
     stats = {
@@ -679,7 +705,7 @@ def requests_list():
     }
     db.close()
     return render_template('center/requests.html', requests=all_requests, stats=stats,
-        current_status=status_filter, current_type=type_filter)
+        current_status=status_filter, current_type=type_filter, current_priority=priority_filter)
 
 
 @center.route('/center/requests/<int:request_id>', methods=['GET'])

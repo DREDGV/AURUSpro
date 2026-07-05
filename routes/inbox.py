@@ -358,6 +358,8 @@ def list_items():
         q += " AND i.auto_assignee_id IS NULL AND i.status NOT IN ('Обработано', 'Отклонено')"
     elif view == 'urgent':
         q += " AND i.priority IN ('Критический', 'Высокий') AND i.status NOT IN ('Обработано', 'Отклонено')"
+    elif view == 'parsed':
+        q += " AND i.status IN ('Разобрано', 'Требует подтверждения')"
     q += " ORDER BY CASE i.status WHEN 'Новое' THEN 0 WHEN 'Разобрано' THEN 1 WHEN 'Требует подтверждения' THEN 2 WHEN 'В работе' THEN 3 ELSE 4 END, i.created_at DESC"
     items = db.execute(q, params).fetchall()
     stats = {

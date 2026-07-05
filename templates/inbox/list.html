@@ -5,22 +5,22 @@
 {% include "_command_nav.html" %}
 
 <div class="stats-row mb-3">
-    <div class="stat-card">
+    <a class="stat-card text-decoration-none text-reset" href="{{ url_for('inbox.list_items') }}" title="Показать все входящие">
         <div class="stat-value">{{ stats.total }}</div>
         <div class="stat-label">Всего</div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a class="stat-card text-decoration-none text-reset" href="{{ url_for('inbox.list_items', status='Новое') }}" title="Показать новые входящие">
         <div class="stat-value text-danger">{{ stats.new }}</div>
         <div class="stat-label">Новых</div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a class="stat-card text-decoration-none text-reset" href="{{ url_for('inbox.list_items', view='parsed') }}" title="Показать входящие, которые ждут решения">
         <div class="stat-value" style="color:#6c5ce7;">{{ stats.parsed }}</div>
         <div class="stat-label">Ждет решения</div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a class="stat-card text-decoration-none text-reset" href="{{ url_for('inbox.list_items', status='Обработано') }}" title="Показать обработанные входящие">
         <div class="stat-value text-success">{{ stats.done }}</div>
         <div class="stat-label">Обработано</div>
-    </div>
+    </a>
 </div>
 
 <div class="d-flex flex-wrap gap-2 mb-3">
@@ -29,6 +29,9 @@
     </a>
     <a class="btn btn-sm {% if current_view == 'urgent' %}btn-danger{% else %}btn-outline-danger{% endif %}" href="{{ url_for('inbox.list_items', view='urgent') }}">
         Срочные · {{ stats.urgent }}
+    </a>
+    <a class="btn btn-sm {% if current_view == 'parsed' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_for('inbox.list_items', view='parsed') }}">
+        Ждут решения · {{ stats.parsed }}
     </a>
     <a class="btn btn-sm {% if current_view == 'overdue' %}btn-warning{% else %}btn-outline-warning{% endif %}" href="{{ url_for('inbox.list_items', view='overdue') }}">
         Просрочка · {{ stats.overdue }}
@@ -124,20 +127,26 @@
                                 </a>
                                 <br><small class="text-muted">
                                     {{ item['category'] or '-' }} · {{ item['created_at'][:16] if item['created_at'] else '' }}
-                                    {% if item['auto_assignee_nick'] %} · {{ item['auto_assignee_nick'] }}{% endif %}
+                                    {% if item['auto_assignee_nick'] %}
+                                        · <a class="link-accent" href="{{ url_for('players.card', player_id=item['auto_assignee_id']) }}">{{ item['auto_assignee_nick'] }}</a>
+                                    {% endif %}
                                     {% if item['due_at'] %}
                                         · <span class="{% if item['due_at'] < now_ts and item['status'] not in ['Обработано', 'Отклонено'] %}text-danger{% endif %}">до {{ item['due_at'] }}</span>
                                     {% endif %}
                                     {% if item['map_alert'] %} · карта{% endif %}
                                 </small>
                             </td>
-                            <td><small>{{ item['player_nick'] or '-' }}</small></td>
+                            <td><small>
+                                {% if item['source_player_id'] and item['player_nick'] %}
+                                <a class="link-accent" href="{{ url_for('players.card', player_id=item['source_player_id']) }}">{{ item['player_nick'] }}</a>
+                                {% else %}-{% endif %}
+                            </small></td>
                             <td>
                                 <span class="badge {% if item['priority'] == 'Критический' %}bg-danger{% elif item['priority'] == 'Высокий' %}bg-warning text-dark{% else %}bg-info{% endif %}">
                                     {{ item['priority'] or '-' }}
                                 </span>
                             </td>
-                            <td><span class="badge bg-secondary">{{ item['status'] }}</span></td>
+                            <td><a class="badge bg-secondary text-decoration-none" href="{{ url_for('inbox.list_items', status=item['status']) }}">{{ item['status'] }}</a></td>
                             <td>
                                 <div class="btn-group btn-group-sm">
                                     <form method="POST" action="{{ url_for('inbox.accept_plan', item_id=item['id']) }}" class="d-inline">

@@ -55,7 +55,13 @@
                 </div>
                 <div class="p-3 rounded" style="background:var(--bg-main);white-space:pre-wrap;">{{ item['raw_text'] }}</div>
                 <div class="small text-muted mt-2">
-                    Источник: {{ item['source_type'] or '-' }} · Игрок: {{ item['player_nick'] or '-' }} · {{ item['created_at'][:16] if item['created_at'] else '' }}
+                    Источник: {{ item['source_type'] or '-' }} · Игрок:
+                    {% if item['source_player_id'] and item['player_nick'] %}
+                    <a class="link-accent" href="{{ url_for('players.card', player_id=item['source_player_id']) }}">{{ item['player_nick'] }}</a>
+                    {% else %}
+                    -
+                    {% endif %}
+                    · {{ item['created_at'][:16] if item['created_at'] else '' }}
                 </div>
             </div>
         </div>

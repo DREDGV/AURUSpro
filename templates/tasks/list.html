@@ -5,26 +5,26 @@
 {% include "_command_nav.html" %}
 
 <div class="stats-row mb-3">
-    <div class="stat-card" style="cursor:pointer;" onclick="window.location='?status='">
+    <a class="stat-card text-decoration-none text-reset" href="{{ url_for('tasks.list') }}" title="Показать все задачи">
         <div class="stat-value">{{ stats.total }}</div>
         <div class="stat-label">Всего</div>
-    </div>
-    <div class="stat-card" style="cursor:pointer;border-left:3px solid var(--danger);" onclick="window.location='?status=Новая'">
+    </a>
+    <a class="stat-card text-decoration-none text-reset" href="{{ url_for('tasks.list', status='Новая') }}" style="border-left:3px solid var(--danger);" title="Показать новые задачи">
         <div class="stat-value text-danger">{{ stats.new }}</div>
         <div class="stat-label">Новых</div>
-    </div>
-    <div class="stat-card" style="cursor:pointer;border-left:3px solid var(--warning);" onclick="window.location='?status=В работе'">
+    </a>
+    <a class="stat-card text-decoration-none text-reset" href="{{ url_for('tasks.list', status='В работе') }}" style="border-left:3px solid var(--warning);" title="Показать задачи в работе">
         <div class="stat-value" style="color:#e67e22;">{{ stats.in_work }}</div>
         <div class="stat-label">В работе</div>
-    </div>
-    <div class="stat-card" style="cursor:pointer;border-left:3px solid #6c5ce7;" onclick="window.location='?status=Ожидает'">
+    </a>
+    <a class="stat-card text-decoration-none text-reset" href="{{ url_for('tasks.list', status='Ожидает') }}" style="border-left:3px solid #6c5ce7;" title="Показать ожидающие задачи">
         <div class="stat-value" style="color:#6c5ce7;">{{ stats.waiting }}</div>
         <div class="stat-label">Ожидают</div>
-    </div>
-    <div class="stat-card" style="cursor:pointer;border-left:3px solid var(--success);" onclick="window.location='?status=Выполнена'">
+    </a>
+    <a class="stat-card text-decoration-none text-reset" href="{{ url_for('tasks.list', status='Выполнена') }}" style="border-left:3px solid var(--success);" title="Показать выполненные задачи">
         <div class="stat-value text-success">{{ stats.done }}</div>
         <div class="stat-label">Выполнено</div>
-    </div>
+    </a>
 </div>
 
 <form class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3" method="GET">
@@ -89,17 +89,28 @@
                         <span class="text-muted">-</span>
                         {% endif %}
                     </td>
-                    <td><small class="text-muted">{{ t['direction'] or '-' }}{% if t['task_type'] %}<br>{{ t['task_type'] }}{% endif %}</small></td>
-                    <td><small>{{ t['assignee_nick'] or '-' }}</small></td>
+                    <td><small class="text-muted">
+                        {% if t['direction'] %}
+                        <a class="link-accent" href="{{ url_for('tasks.list', direction=t['direction']) }}">{{ t['direction'] }}</a>
+                        {% else %}-{% endif %}
+                        {% if t['task_type'] %}
+                        <br><a class="link-accent" href="{{ url_for('tasks.list', type=t['task_type']) }}">{{ t['task_type'] }}</a>
+                        {% endif %}
+                    </small></td>
+                    <td><small>
+                        {% if t['assignee_id'] and t['assignee_nick'] %}
+                        <a class="link-accent" href="{{ url_for('players.card', player_id=t['assignee_id']) }}">{{ t['assignee_nick'] }}</a>
+                        {% else %}-{% endif %}
+                    </small></td>
                     <td>
-                        <span class="badge {% if t['priority'] == 'Критический' %}bg-danger{% elif t['priority'] == 'Высокий' %}bg-warning text-dark{% elif t['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">
+                        <a href="{{ url_for('tasks.list', priority=t['priority']) }}" class="badge text-decoration-none {% if t['priority'] == 'Критический' %}bg-danger{% elif t['priority'] == 'Высокий' %}bg-warning text-dark{% elif t['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">
                             {{ t['priority'] }}
-                        </span>
+                        </a>
                     </td>
                     <td>
-                        <span class="badge {% if t['status'] == 'Новая' %}bg-primary{% elif t['status'] == 'В работе' %}bg-warning text-dark{% elif t['status'] == 'Выполнена' %}bg-success{% elif t['status'] == 'Ожидает' %}bg-secondary{% else %}bg-dark{% endif %}">
+                        <a href="{{ url_for('tasks.list', status=t['status']) }}" class="badge text-decoration-none {% if t['status'] == 'Новая' %}bg-primary{% elif t['status'] == 'В работе' %}bg-warning text-dark{% elif t['status'] == 'Выполнена' %}bg-success{% elif t['status'] == 'Ожидает' %}bg-secondary{% else %}bg-dark{% endif %}">
                             {{ t['status'] }}
-                        </span>
+                        </a>
                     </td>
                     <td><small>{{ t['deadline'] or '-' }}</small></td>
                     <td>

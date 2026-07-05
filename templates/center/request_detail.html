@@ -12,13 +12,13 @@
             </div>
             <div class="panel-body">
                 <div class="d-flex gap-2 mb-3">
-                    <span class="badge {% if req['priority'] == 'Критический' %}bg-danger{% elif req['priority'] == 'Высокий' %}bg-warning text-dark{% elif req['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">
+                    <a href="{{ url_for('center.requests_list', priority=req['priority']) }}" class="badge text-decoration-none {% if req['priority'] == 'Критический' %}bg-danger{% elif req['priority'] == 'Высокий' %}bg-warning text-dark{% elif req['priority'] == 'Средний' %}bg-info{% else %}bg-secondary{% endif %}">
                         {{ req['priority'] }}
-                    </span>
-                    <span class="badge {% if req['status'] == 'Новый' %}bg-danger{% elif req['status'] == 'В работе' %}bg-warning text-dark{% elif req['status'] == 'На паузе' %}bg-secondary{% elif req['status'] == 'Ожидает' %}bg-info{% elif req['status'] == 'Выполнен' %}bg-success{% elif req['status'] == 'Отклонён' %}bg-dark{% else %}bg-secondary{% endif %}">
+                    </a>
+                    <a href="{{ url_for('center.requests_list', status=req['status']) }}" class="badge text-decoration-none {% if req['status'] == 'Новый' %}bg-danger{% elif req['status'] == 'В работе' %}bg-warning text-dark{% elif req['status'] == 'На паузе' %}bg-secondary{% elif req['status'] == 'Ожидает' %}bg-info{% elif req['status'] == 'Выполнен' %}bg-success{% elif req['status'] == 'Отклонён' %}bg-dark{% else %}bg-secondary{% endif %}">
                         {{ req['status'] }}
-                    </span>
-                    <span class="badge bg-secondary">{{ req['request_type'] }}</span>
+                    </a>
+                    <a class="badge bg-secondary text-decoration-none" href="{{ url_for('center.requests_list', type=req['request_type']) }}">{{ req['request_type'] }}</a>
                 </div>
                 {% if req['description'] %}
                 <div class="p-3 rounded mb-3" style="background:var(--bg-main);">
@@ -26,7 +26,11 @@
                 </div>
                 {% endif %}
                 <div class="row text-muted" style="font-size:13px;">
-                    <div class="col-md-3"><strong>Игрок:</strong> {{ req['player_nick'] or '—' }}</div>
+                    <div class="col-md-3"><strong>Игрок:</strong>
+                        {% if req['player_db_id'] and req['player_nick'] %}
+                        <a class="link-accent" href="{{ url_for('players.card', player_id=req['player_db_id']) }}">{{ req['player_nick'] }}</a>
+                        {% else %}—{% endif %}
+                    </div>
                     <div class="col-md-3"><strong>Ответственный:</strong> {{ req['assignee'] or '—' }}</div>
                     <div class="col-md-3"><strong>Создан:</strong> {{ req['created_at'][:10] if req['created_at'] else '—' }}</div>
                     <div class="col-md-3"><strong>Решён:</strong> {{ req['resolved_at'][:10] if req['resolved_at'] else '—' }}</div>
