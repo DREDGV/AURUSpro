@@ -1,0 +1,22 @@
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('center.index') }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-command"></i> Центр
+        </a>
+        <a href="{{ url_for('center.control') }}" class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-activity"></i> Контроль
+        </a>
+        <a href="{{ url_for('inbox.list_items') }}" class="btn btn-sm btn-outline-info">
+            <i class="bi bi-inbox"></i> Входящие
+        </a>
+        <a href="{{ url_for('tasks.list') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-list-check"></i> Задачи
+        </a>
+        <a href="{{ url_for('map.index') }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-map"></i> Карта
+        </a>
+    </div>
+    <div class="text-muted small">
+        Быстрый возврат в штаб без стрелки браузера
+    </div>
+</div>

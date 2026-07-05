@@ -2,6 +2,7 @@
 {% block title %}{% if task %}Редактирование{% else %}Новая задача{% endif %} - AURUS{% endblock %}
 {% block page_title %}{% if task %}Редактирование: {{ task['title'] }}{% else %}Новая задача{% endif %}{% endblock %}
 {% block content %}
+{% include "_command_nav.html" %}
 <div class="mb-3">
     <a href="{{ url_for('tasks.list') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Назад</a>
 </div>

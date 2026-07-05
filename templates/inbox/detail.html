@@ -2,6 +2,7 @@
 {% block title %}Входящее #{{ item['id'] }} - AURUS{% endblock %}
 {% block page_title %}Разбор входящего #{{ item['id'] }}{% endblock %}
 {% block content %}
+{% include "_command_nav.html" %}
 {% set detected_players = analysis.players or [] %}
 {% set detected_coords = analysis.coordinates or [] %}
 {% set first_coord = detected_coords[0].text if detected_coords else '' %}
