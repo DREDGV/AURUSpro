@@ -1096,6 +1096,119 @@ def api_create_map_task():
     return jsonify({'ok': True, 'task': payload})
 
 
+@map_bp.route('/map/api/requests', methods=['POST'])
+def api_create_map_request():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    x = data.get('x')
+    y = data.get('y')
+    z = data.get('z', 0) or 0
+    try:
+        x = int(x)
+        y = int(y)
+        z = int(z)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Valid x, y, z are required'}), 400
+    if not (ALLIANCE_MIN_X <= x <= ALLIANCE_MAX_X and ALLIANCE_MIN_Y <= y <= ALLIANCE_MAX_Y):
+        return jsonify({'error': 'Coordinates outside alliance area'}), 400
+
+    coords = '[%d:%d:%d]' % (x, y, z)
+    title = (data.get('title') or '').strip() or ('Заявка с карты %s' % coords)
+    priority = (data.get('priority') or 'Средний').strip()
+    request_type = (data.get('request_type') or 'Карта').strip()
+    description = (data.get('description') or '').strip() or ('Создано с карты по координатам %s.' % coords)
+    status = (data.get('status') or 'Новый').strip()
+
+    db = get_db()
+    ensure_alliance_schema(db)
+    db.execute(
+        '''INSERT INTO requests (player_id, request_type, title, description, priority, status,
+           assignee, coordinates, due_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        (
+            data.get('player_id') or None,
+            request_type,
+            title,
+            description,
+            priority,
+            status,
+            data.get('assignee'),
+            coords,
+            data.get('due_at'),
+        ),
+    )
+    request_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+    db.execute(
+        '''INSERT INTO alliance_log (event_type, title, description, author, event_date,
+           coordinates, related_request_id)
+           VALUES (?, ?, ?, ?, date('now'), ?, ?)''',
+        (
+            'Заявка',
+            'Создана заявка с карты',
+            '%s %s' % (title, coords),
+            session.get('username'),
+            coords,
+            request_id,
+        ),
+    )
+    db.commit()
+    row = db.execute(
+        '''SELECT r.*, p.nick AS player_nick
+           FROM requests r LEFT JOIN players p ON p.id = r.player_id
+           WHERE r.id = ?''',
+        (request_id,),
+    ).fetchone()
+    marker = _work_marker_payload('request', row, {'x': x, 'y': y, 'z': z})
+    db.close()
+    return jsonify({'ok': True, 'request': marker})
+
+
+@map_bp.route('/map/api/log', methods=['POST'])
+def api_create_map_log():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    data = request.get_json() or {}
+    x = data.get('x')
+    y = data.get('y')
+    z = data.get('z', 0) or 0
+    try:
+        x = int(x)
+        y = int(y)
+        z = int(z)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Valid x, y, z are required'}), 400
+    if not (ALLIANCE_MIN_X <= x <= ALLIANCE_MAX_X and ALLIANCE_MIN_Y <= y <= ALLIANCE_MAX_Y):
+        return jsonify({'error': 'Coordinates outside alliance area'}), 400
+
+    coords = '[%d:%d:%d]' % (x, y, z)
+    title = (data.get('title') or '').strip() or ('Отметка на карте %s' % coords)
+    description = (data.get('description') or '').strip() or ('Создано с карты по координатам %s.' % coords)
+    event_type = (data.get('event_type') or 'Карта').strip()
+
+    db = get_db()
+    ensure_alliance_schema(db)
+    db.execute(
+        '''INSERT INTO alliance_log (event_type, title, description, related_player, author,
+           event_date, coordinates)
+           VALUES (?, ?, ?, ?, ?, date('now'), ?)''',
+        (
+            event_type,
+            title,
+            description,
+            data.get('related_player'),
+            session.get('username'),
+            coords,
+        ),
+    )
+    log_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+    db.commit()
+    row = db.execute('SELECT * FROM alliance_log WHERE id = ?', (log_id,)).fetchone()
+    marker = _work_marker_payload('log', row, {'x': x, 'y': y, 'z': z})
+    db.close()
+    return jsonify({'ok': True, 'log': marker})
+
+
 @map_bp.route('/map/api/network-issues')
 def api_network_issues():
     if 'user_id' not in session:

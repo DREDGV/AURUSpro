@@ -4697,6 +4697,18 @@ class GameMap {
       point.sy +
       ":0]</div>";
     html +=
+      '<div class="ctx-item" data-action="create_request"><i class="bi bi-life-preserver"></i> Создать заявку [' +
+      point.sx +
+      ":" +
+      point.sy +
+      ":0]</div>";
+    html +=
+      '<div class="ctx-item" data-action="create_log"><i class="bi bi-journal-text"></i> Запись журнала [' +
+      point.sx +
+      ":" +
+      point.sy +
+      ":0]</div>";
+    html +=
       '<div class="ctx-item" data-action="create_station"><i class="bi bi-geo-alt"></i> Новая алстанция</div>';
     html +=
       '<div class="ctx-item" data-action="create_ops"><i class="bi bi-shield"></i> Новый ОПС</div>';
@@ -4884,6 +4896,91 @@ class GameMap {
     }
     const data = await resp.json();
     if (data.task) this.mapTasks.push(data.task);
+    this._updateAllianceOpsPanel();
+    this.render();
+  }
+
+  async _ctx_create_request() {
+    this.hideContextMenu();
+    if (!this._contextPos) return;
+    const obj = this._contextPos.obj;
+    const title = prompt(
+      "Название заявки",
+      obj
+        ? "Проблема на карте: " + (obj.name || obj.nick || "объект")
+        : "Заявка с карты [" + this._contextPos.sx + ":" + this._contextPos.sy + ":0]",
+    );
+    if (!title) return;
+    const description = prompt(
+      "Комментарий к заявке",
+      obj
+        ? "Создано с карты для объекта: " + (obj.name || obj.nick || obj.id)
+        : "Создано с карты по координатам.",
+    );
+    const payload = {
+      title: title,
+      description: description || "",
+      request_type: obj && this._isAlstation(obj) ? "Алстанции" : "Карта",
+      priority: obj && this._isAlstation(obj) ? "Высокий" : "Средний",
+      status: "Новый",
+      x: this._contextPos.sx,
+      y: this._contextPos.sy,
+      z: 0,
+    };
+    const resp = await fetch("/map/api/requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      alert(data.error || "Не удалось создать заявку");
+      return;
+    }
+    const data = await resp.json();
+    if (data.request) this.workMarkers.push(data.request);
+    this._updateAllianceOpsPanel();
+    this.render();
+  }
+
+  async _ctx_create_log() {
+    this.hideContextMenu();
+    if (!this._contextPos) return;
+    const obj = this._contextPos.obj;
+    const title = prompt(
+      "Заголовок записи журнала",
+      obj
+        ? "Отметка карты: " + (obj.name || obj.nick || "объект")
+        : "Отметка на карте [" + this._contextPos.sx + ":" + this._contextPos.sy + ":0]",
+    );
+    if (!title) return;
+    const description = prompt(
+      "Описание",
+      obj
+        ? "Создано с карты для объекта: " + (obj.name || obj.nick || obj.id)
+        : "Создано с карты по координатам.",
+    );
+    const payload = {
+      title: title,
+      description: description || "",
+      event_type: "Карта",
+      related_player: obj && obj.player ? obj.player : null,
+      x: this._contextPos.sx,
+      y: this._contextPos.sy,
+      z: 0,
+    };
+    const resp = await fetch("/map/api/log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      alert(data.error || "Не удалось создать запись журнала");
+      return;
+    }
+    const data = await resp.json();
+    if (data.log) this.workMarkers.push(data.log);
     this._updateAllianceOpsPanel();
     this.render();
   }
