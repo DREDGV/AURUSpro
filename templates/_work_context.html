@@ -1,0 +1,55 @@
+{% if work_context and work_context.total %}
+<div class="panel mb-3">
+    <div class="panel-header">
+        <h6><i class="bi bi-diagram-3 me-2"></i>Связи штаба</h6>
+        <span class="small text-muted">{{ work_context.total }} связанных записей</span>
+    </div>
+    <div class="panel-body">
+        {% if work_context.coordinates %}
+        <div class="mb-3">
+            <span class="text-muted small">Координаты:</span>
+            <a class="link-accent" href="{{ url_for('map.index') }}?focus={{ work_context.coordinates }}"><code>{{ work_context.coordinates }}</code></a>
+        </div>
+        {% endif %}
+
+        {% for section_key, title, icon in [
+            ('intake', 'Входящие', 'bi-inbox'),
+            ('tasks', 'Задачи', 'bi-list-check'),
+            ('requests', 'Заявки', 'bi-life-preserver'),
+            ('decisions', 'Решения', 'bi-check2-square'),
+            ('notes', 'Заметки игроков', 'bi-person-lines-fill'),
+            ('log', 'Журнал', 'bi-journal-text')
+        ] %}
+        {% set items = work_context.sections[section_key] %}
+        {% if items %}
+        <div class="mb-3">
+            <div class="small text-muted fw-bold text-uppercase mb-2"><i class="bi {{ icon }} me-1"></i>{{ title }}</div>
+            <div class="d-flex flex-column gap-2">
+                {% for item in items %}
+                <div class="p-2 rounded" style="background:var(--bg-main);border:1px solid rgba(255,255,255,0.08);">
+                    <div class="d-flex justify-content-between gap-2">
+                        <div>
+                            <a href="{{ item.url }}" class="link-accent fw-semibold">{{ item.title }}</a>
+                            <br><small class="text-muted">
+                                {{ item.label }} #{{ item.id }}
+                                {% if item.status %} · {{ item.status }}{% endif %}
+                                {% if item.priority %} · {{ item.priority }}{% endif %}
+                                {% if item.meta %} · {{ item.meta }}{% endif %}
+                            </small>
+                            {% if item.description %}
+                            <br><small class="text-muted">{{ item.description }}</small>
+                            {% endif %}
+                        </div>
+                        {% if item.coordinates %}
+                        <a href="{{ url_for('map.index') }}?focus={{ item.coordinates }}" class="small link-accent flex-shrink-0"><code>{{ item.coordinates }}</code></a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endif %}

@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, session, redirect, url_for, request, flash, jsonify
 from utils.db import get_db
 from utils.schema import ensure_alliance_schema
+from utils.work_context import build_work_context
 from routes.map import _existing_alstations, _network_issue_payload, _intake_alerts, _work_markers
 import json
 
@@ -477,8 +478,20 @@ def decision_detail(decision_id):
            ORDER BY created_at DESC LIMIT 12''',
         (decision_id, decision['source_intake_id'])
     ).fetchall()
+    work_context = build_work_context(
+        db,
+        'decision',
+        decision_id,
+        source_intake_id=decision['source_intake_id'],
+        coordinates=decision['coordinates'],
+    )
     db.close()
-    return render_template('center/decision_detail.html', decision=decision, related_log=related_log)
+    return render_template(
+        'center/decision_detail.html',
+        decision=decision,
+        related_log=related_log,
+        work_context=work_context,
+    )
 
 
 @center.route('/center/decisions/<int:decision_id>/update', methods=['POST'])
@@ -595,8 +608,22 @@ def request_detail(request_id):
         (request_id, req['source_intake_id']),
     ).fetchall()
     players = db.execute("SELECT id, nick FROM players ORDER BY nick").fetchall()
+    work_context = build_work_context(
+        db,
+        'request',
+        request_id,
+        source_intake_id=req['source_intake_id'],
+        coordinates=req['coordinates'],
+    )
     db.close()
-    return render_template('center/request_detail.html', req=req, comments=comments, players=players, related_log=related_log)
+    return render_template(
+        'center/request_detail.html',
+        req=req,
+        comments=comments,
+        players=players,
+        related_log=related_log,
+        work_context=work_context,
+    )
 
 
 @center.route('/center/requests/<int:request_id>/update', methods=['POST'])

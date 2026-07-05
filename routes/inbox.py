@@ -7,6 +7,7 @@ from flask import Blueprint, flash, jsonify, redirect, render_template, request,
 from utils.db import get_db
 from utils.intake_engine import analyze_intake, extract_coordinates
 from utils.schema import ensure_alliance_schema
+from utils.work_context import build_work_context
 
 inbox = Blueprint('inbox', __name__)
 
@@ -665,6 +666,14 @@ def detail(item_id):
            LIMIT 1""",
         (item_id,),
     ).fetchone()
+    first_coord = _first_coordinate_text(item)
+    work_context = build_work_context(
+        db,
+        'intake',
+        item_id,
+        source_intake_id=item_id,
+        coordinates=first_coord,
+    )
     db.close()
     return render_template(
         'inbox/detail.html',
@@ -677,6 +686,7 @@ def detail(item_id):
         priorities=PRIORITIES,
         task_directions=TASK_DIRECTIONS,
         task_types=TASK_TYPES,
+        work_context=work_context,
         now_ts=datetime.now().strftime('%Y-%m-%d %H:%M'),
     )
 

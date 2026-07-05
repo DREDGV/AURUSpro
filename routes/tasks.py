@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, redirect, render_template, request, sessio
 
 from utils.db import get_db
 from utils.schema import ensure_alliance_schema
+from utils.work_context import build_work_context
 
 tasks = Blueprint('tasks', __name__)
 
@@ -229,8 +230,21 @@ def detail(task_id):
            ORDER BY created_at DESC LIMIT 12''',
         (task_id, task['source_intake_id']),
     ).fetchall()
+    work_context = build_work_context(
+        db,
+        'task',
+        task_id,
+        source_intake_id=task['source_intake_id'],
+        coordinates=task['coordinates'],
+    )
     db.close()
-    return render_template('tasks/detail.html', task=task, comments=comments, related_log=related_log)
+    return render_template(
+        'tasks/detail.html',
+        task=task,
+        comments=comments,
+        related_log=related_log,
+        work_context=work_context,
+    )
 
 
 @tasks.route('/tasks/<int:task_id>/edit', methods=['GET', 'POST'])
