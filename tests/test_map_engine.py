@@ -4,6 +4,7 @@ from utils.map_engine import (
     alstation_radius,
     build_greedy_alstation_network,
     build_alstation_suggestions,
+    classify_alstation_network,
     compare_alstation_levels,
     evaluate_alstation_at,
     is_map_ready,
@@ -90,6 +91,24 @@ class MapEngineTest(unittest.TestCase):
         self.assertEqual(result[0]["level"], 12)
         self.assertGreaterEqual(result[0]["covered_weight"], 7)
         self.assertTrue(all("score" in item for item in result))
+
+    def test_network_connects_stations_inside_previous_signal(self):
+        stations = [
+            {"id": 1, "name": "Главная", "x": 2500, "y": 2500, "z": 0, "radius": 9000, "map_ready": True},
+            {"id": 2, "name": "Внутри главной", "x": 2500, "y": 2508, "z": 0, "radius": 9000, "map_ready": True},
+            {"id": 3, "name": "Цепочка", "x": 2500, "y": 2516, "z": 0, "radius": 9000, "map_ready": True},
+            {"id": 4, "name": "Вне сети", "x": 2500, "y": 2530, "z": 0, "radius": 9000, "map_ready": True},
+        ]
+
+        by_id = {item["id"]: item for item in classify_alstation_network(stations)}
+
+        self.assertEqual(by_id[1]["network_status"], "main")
+        self.assertTrue(by_id[2]["network_connected"])
+        self.assertEqual(by_id[2]["network_status"], "network")
+        self.assertTrue(by_id[3]["network_connected"])
+        self.assertEqual(by_id[3]["network_status"], "network")
+        self.assertFalse(by_id[4]["network_connected"])
+        self.assertEqual(by_id[4]["network_status"], "isolated")
 
 
 if __name__ == "__main__":

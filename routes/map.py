@@ -686,8 +686,11 @@ def api_data():
             }, coords))
 
     gos = db.execute(
-        'SELECT g.id, g.object_type, g.name, g.player_id, g.coordinates, g.level, g.status, g.comment '
-        'FROM game_objects g WHERE g.coordinates IS NOT NULL AND g.coordinates != ""'
+        '''SELECT g.id, g.object_type, g.name, g.player_id, p.nick AS player_nick,
+                  g.coordinates, g.level, g.status, g.comment
+           FROM game_objects g
+           LEFT JOIN players p ON p.id = g.player_id
+           WHERE g.coordinates IS NOT NULL AND g.coordinates != ""'''
     ).fetchall()
     for g in gos:
         coords = parse_coordinates(g['coordinates'])
@@ -710,6 +713,9 @@ def api_data():
                 'status': g['status'] or '',
                 'comment': g['comment'] or '',
                 'player_id': g['player_id'],
+                'player_nick': g['player_nick'],
+                'player': g['player_nick'],
+                'player_url': url_for('players.card', player_id=g['player_id']) if g['player_id'] else None,
                 'url': None
             }, coords)
         if _is_alstation_type(g['object_type']):
@@ -1414,6 +1420,10 @@ def api_create_station():
     )
     db.commit()
     new_id = cursor.lastrowid
+    player_nick = None
+    if player_id:
+        player = db.execute('SELECT nick FROM players WHERE id = ?', (player_id,)).fetchone()
+        player_nick = player['nick'] if player else None
     db.close()
 
     return jsonify({
@@ -1423,6 +1433,8 @@ def api_create_station():
         'x': x, 'y': y, 'z': z,
         'coordinates': coord_str,
         'player_id': player_id,
+        'player_nick': player_nick,
+        'player': player_nick,
         'radius': alstation_radius(level),
     }), 201
 
@@ -1481,7 +1493,11 @@ def api_update_station(station_id):
         db.commit()
 
     updated = db.execute(
-        'SELECT id, player_id, name, coordinates, level, status, comment, object_type FROM game_objects WHERE id = ?', (station_id,)
+        '''SELECT g.id, g.player_id, p.nick AS player_nick, g.name, g.coordinates,
+                  g.level, g.status, g.comment, g.object_type
+           FROM game_objects g
+           LEFT JOIN players p ON p.id = g.player_id
+           WHERE g.id = ?''', (station_id,)
     ).fetchone()
     db.close()
 
@@ -1499,6 +1515,8 @@ def api_update_station(station_id):
         'status': updated['status'],
         'comment': updated['comment'] or '',
         'player_id': updated['player_id'],
+        'player_nick': updated['player_nick'],
+        'player': updated['player_nick'],
         'object_type': updated['object_type'],
     })
 
@@ -1526,7 +1544,11 @@ def api_get_station(station_id):
         return jsonify({'error': 'Unauthorized'}), 401
     db = get_db()
     row = db.execute(
-        'SELECT id, player_id, name, coordinates, level, object_type FROM game_objects WHERE id = ?',
+        '''SELECT g.id, g.player_id, p.nick AS player_nick, g.name, g.coordinates,
+                  g.level, g.object_type
+           FROM game_objects g
+           LEFT JOIN players p ON p.id = g.player_id
+           WHERE g.id = ?''',
         (station_id,)
     ).fetchone()
     if not row:
@@ -1558,5 +1580,7 @@ def api_get_station(station_id):
         'status': status,
         'comment': comment,
         'player_id': row['player_id'],
+        'player_nick': row['player_nick'],
+        'player': row['player_nick'],
         'object_type': row['object_type'],
     })

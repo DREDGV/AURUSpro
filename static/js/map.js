@@ -788,7 +788,9 @@ class GameMap {
         : item.network_status === "main"
           ? "главная"
           : "";
+    const ownerNick = item.player_nick || item.player || "";
     const titleParts = [isPlan ? "План" : item.name || "Алстанция"];
+    if (ownerNick) titleParts.push(ownerNick);
     if (!this.displaySettings.levelBadges) {
       titleParts.push((level || item.level || 1) + " ур");
     }
@@ -2905,6 +2907,8 @@ class GameMap {
     if (obj.level) html += `<div>Уровень: ${obj.level}</div>`;
     if (obj.radius)
       html += `<div>Радиус: ${obj.radius.toLocaleString()} укм</div>`;
+    if (obj.player_nick || obj.player)
+      html += `<div>Владелец: ${this._escapeHtml(obj.player_nick || obj.player)}</div>`;
     if (this._isAlstation(obj)) {
       const mobility = this._stationMobility(obj);
       html += `<div>Тип: ${
@@ -3604,6 +3608,10 @@ class GameMap {
     );
   }
 
+  _isNetworkLink(point, parent) {
+    return this._distance(point, parent) <= parent.radius;
+  }
+
   _mainNetworkRoot(fallbackLevel = 10) {
     const stations = this._existingAlstations();
     const root = stations.find(
@@ -3680,10 +3688,11 @@ class GameMap {
     const candidates = parents
       .map((parent) => ({
         parent,
+        distance: this._distance(point, parent),
         delta: Math.abs(this._distance(point, parent) - parent.radius),
       }))
-      .filter((item) => !requireTouch || item.delta <= this._networkTouchTolerance())
-      .sort((a, b) => a.delta - b.delta);
+      .filter((item) => !requireTouch || this._isNetworkLink(point, item.parent))
+      .sort((a, b) => a.distance - b.distance || a.delta - b.delta);
     return candidates[0] ? candidates[0].parent : null;
   }
 
@@ -5484,6 +5493,7 @@ class GameMap {
         const subtype = s.subtype || "Объект";
         const icon = icons[subtype] || "●";
         const color = colors[subtype] || "#bdc3c7";
+        const ownerText = s.player_nick || s.player ? " · " + this._escapeHtml(s.player_nick || s.player) : "";
         const networkText = this._isAlstation(s)
           ? s.network_status === "main"
             ? " · главная"
@@ -5509,6 +5519,7 @@ class GameMap {
           (s.z || 0) +
           "] ур." +
           s.level +
+          ownerText +
           networkText +
           "</span>" +
           '<button class="btn btn-sm btn-outline-secondary py-0 px-1 obj-edit-btn" data-id="' +

@@ -89,6 +89,10 @@ def is_network_touch(point, station, tolerance=NETWORK_TOUCH_TOLERANCE):
     return abs(distance(point, station) - station["radius"]) <= tolerance
 
 
+def is_network_link(point, station):
+    return distance(point, station) <= station["radius"]
+
+
 def classify_alstation_network(stations, fallback_level=10):
     ready = [dict(s) for s in stations if s.get("map_ready")]
     root = next(
@@ -149,7 +153,7 @@ def classify_alstation_network(stations, fallback_level=10):
         changed = False
         next_remaining = []
         for station in remaining:
-            parent = _best_touching_parent(station, connected)
+            parent = _best_linking_parent(station, connected)
             if parent:
                 station["network_connected"] = True
                 station["network_status"] = "network"
@@ -181,6 +185,13 @@ def _best_touching_parent(point, connected):
     if not touching:
         return None
     return min(touching, key=lambda station: abs(distance(point, station) - station["radius"]))
+
+
+def _best_linking_parent(point, connected):
+    linked = [station for station in connected if is_network_link(point, station)]
+    if not linked:
+        return None
+    return min(linked, key=lambda station: distance(point, station))
 
 
 def coverage_count(point, points, radius):
