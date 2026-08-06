@@ -10,6 +10,34 @@
             <h2>AURUS Control Panel</h2>
             <p class="text-muted">Управление альянсом AURUS [SILA]</p>
         </div>
+        
+        {% if register %}
+        <!-- Форма регистрации -->
+        <form method="POST" class="login-form">
+            <div class="form-floating mb-3">
+                <input type="text" name="username" class="form-control" id="username" placeholder="Логин" required autofocus>
+                <label for="username"><i class="bi bi-person me-1"></i>Логин</label>
+            </div>
+            <div class="form-floating mb-3">
+                <input type="email" name="email" class="form-control" id="email" placeholder="Email">
+                <label for="email"><i class="bi bi-envelope me-1"></i>Email (необязательно)</label>
+            </div>
+            <div class="form-floating mb-4">
+                <input type="password" name="password" class="form-control" id="password" placeholder="Пароль" required minlength="8">
+                <label for="password"><i class="bi bi-lock me-1"></i>Пароль</label>
+            </div>
+            <div class="alert alert-info small mb-3">
+                <i class="bi bi-info-circle me-1"></i>
+                Пароль должен быть не менее 8 символов, содержать цифры и спецсимволы (!@#$%^&*)
+            </div>
+            <button type="submit" class="btn btn-primary btn-login w-100">Зарегистрироваться</button>
+        </form>
+        <div class="login-footer">
+            <span class="text-muted">Уже есть аккаунт?</span>
+            <a href="{{ url_for('auth.login') }}">Войти</a>
+        </div>
+        {% else %}
+        <!-- Форма входа -->
         <form method="POST" class="login-form">
             <div class="form-floating mb-3">
                 <input type="text" name="username" class="form-control" id="username" placeholder="Логин" required autofocus>
@@ -19,19 +47,18 @@
                 <input type="password" name="password" class="form-control" id="password" placeholder="Пароль" required>
                 <label for="password"><i class="bi bi-lock me-1"></i>Пароль</label>
             </div>
-            <button type="submit" class="btn btn-primary btn-login w-100">
-                {% if register %}Зарегистрироваться{% else %}Войти{% endif %}
-            </button>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <a href="{{ url_for('auth.forgot_password') }}" class="small text-decoration-none">
+                    <i class="bi bi-key me-1"></i>Забыли пароль?
+                </a>
+            </div>
+            <button type="submit" class="btn btn-primary btn-login w-100">Войти</button>
         </form>
         <div class="login-footer">
-            {% if register %}
-            <span class="text-muted">Уже есть аккаунт?</span>
-            <a href="{{ url_for('auth.login') }}">Войти</a>
-            {% else %}
             <span class="text-muted">Нет аккаунта?</span>
             <a href="{{ url_for('auth.register') }}">Зарегистрироваться</a>
-            {% endif %}
         </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
